@@ -409,18 +409,160 @@ Checklist ก่อนกด Compile
    - BTS7960 ติดตั้งแล้ว
    - ไม่มี BTS7960 ซ้ำหลายเวอร์ชัน
 
------------------------------------------------------
-สรุปสั้นที่สุด
------------------------------------------------------
-
-ติดตั้งแค่:
-- IBusBM
-- BTS7960
-
-ที่เหลือมีมาให้แล้วใน Arduino IDE
-
 =====================================================
 
 
+
+# TN Mower – MegaBt2Ibus Control System
+
+ระบบควบคุมรถ/เครื่องจักรด้วยรีโมท FlySky ผ่านสัญญาณ IBUS
+พัฒนาบน Arduino Mega 2560
+ออกแบบเน้นความปลอดภัย (ARM / DISARM / FAILSAFE) และการทำงานแบบ non-blocking
+
+โค้ดชุดนี้เหมาะสำหรับงานทดลอง งานพัฒนา และงานควบคุมที่มีผู้ใช้งานดูแลตลอดเวลา
+
+## Features
+- FlySky i6X + IBUS รองรับ 10 Channels
+- ARM / DISARM ชัดเจน
+- FAILSAFE แบบ LATCH (IBUS หาย = ดับทันที)
+- Tank Drive ด้วย BTS7960
+- Soft start / soft stop
+- ป้องกันการกลับทิศทันที
+- ควบคุมเครื่องยนต์ด้วย Throttle Servo + Ignition/Starter Relay
+- Starter timeout และ lock
+- รีเลย์เสริม (ไฟ)
+- Watchdog Timer
+- โครงสร้างแยก Manager ชัดเจน
+
+## Project Structure
+MegaBt2Ibus/
+- MegaBt2Ibus.ino
+- IBusManager.h / IBusManager.cpp
+- SafetyManager.h / SafetyManager.cpp
+- SystemState.h / SystemState.cpp
+- DriveManager.h / DriveManager.cpp
+- EngineManager.h / EngineManager.cpp
+- RelayManager.h / RelayManager.cpp
+- README.md
+
+## System Concept
+รีโมทเป็นเพียง input
+การตัดสินใจทั้งหมดอยู่ที่โค้ด
+
+Flow:
+FlySky Remote
+→ IBusManager
+→ SafetyManager
+→ SystemState
+→ Drive / Engine / Relay
+
+เมื่อ FAILSAFE ทำงาน ทุก subsystem จะถูกตัดทันที และไม่กลับมาเอง
+
+## Channel Mapping (FlySky i6X)
+CH1  : Steer
+CH2  : Drive Throttle
+CH3  : Engine Throttle Servo
+CH4  : Not Used
+CH5  : ARM / DISARM
+CH6  : Ignition
+CH7  : Starter
+CH8  : Light Relay
+CH9  : Reserve
+CH10 : Reserve
+
+Condition:
+- Value > 1500 = ON
+- Value < 1500 = OFF
+
+## Pin Map (Arduino Mega 2560)
+
+IBUS
+- Receiver IBUS → RX1 (Pin 19)
+
+Drive – BTS7960
+Motor Left:
+- EN   → Pin 4
+- LPWM → Pin 6
+- RPWM → Pin 5
+
+Motor Right:
+- EN   → Pin 9
+- LPWM → Pin 8
+- RPWM → Pin 7
+
+Engine
+- Throttle Servo Signal → Pin 9
+- Ignition Relay        → Pin 22
+- Starter Relay         → Pin 23
+
+Auxiliary
+- Light Relay           → Pin 24
+
+## Required Libraries
+
+Install:
+- IBusBM
+  https://github.com/bmellink/IBusBM
+- BTS7960
+  https://github.com/RobTillaart/BTS7960
+
+Built-in:
+- Arduino AVR Core
+- Servo Library
+
+## Arduino IDE Setup
+- Board: Arduino Mega 2560
+- Select correct Port
+- Install required libraries before compile
+
+## Quick Start
+1. Power on transmitter
+2. Power on system
+3. Set CH5 = OFF (DISARM) to clear FAILSAFE
+4. Set CH5 = ON (ARM)
+5. Operate drive and engine via assigned channels
+
+## FAILSAFE Behavior
+Triggered when:
+- Transmitter off
+- IBUS signal lost
+- Persistent signal error
+
+Action:
+- Motors stop
+- BTS7960 disabled
+- Ignition OFF
+- Starter OFF
+- All relays OFF
+
+Recovery:
+- DISARM required
+- ARM again to resume
+- System never resumes automatically
+
+## Limitations
+- No sensor feedback
+- No current limit
+- No engine running detection
+- Open-loop system
+- Must be supervised at all times
+
+## Intended Use
+Suitable for:
+- Prototype development
+- Field testing
+- Supervised remote control systems
+
+Not suitable for:
+- Commercial deployment
+- Unattended autonomous operation
+
+## License
+Provided for educational and development purposes.
+Users are responsible for system safety and compliance.
+
+## Author
+TN Mower Project
+Arduino Mega 2560 + FlySky IBUS Control System
 
 
