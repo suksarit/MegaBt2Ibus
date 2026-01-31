@@ -1,20 +1,14 @@
 // =====================================================
 // DriveManager.cpp
-// Tank Drive Controller (BTS7960)
+// Tank Drive Controller (4 Motors / 4 BTS7960)
 //
-// Features:
-// - Tank drive (Left / Right)
-// - Soft start / soft stop (slew rate)
-// - Deadzone protection
-// - Non-blocking
+// Configuration:
+// - Left Front  + Left Rear  = Left Track
+// - Right Front + Right Rear = Right Track
 //
 // Safety Policy:
-// - stop()     = controlled stop (DISARM)
-// - failsafe() = immediate stop (FAILSAFE)
-//
-// NOTE:
-// - ไม่ตัดสิน ARM / FAILSAFE ที่นี่
-// - DriveManager ทำหน้าที่ "ลงมือขับ" เท่านั้น
+// - stop()     = soft stop
+// - failsafe() = immediate stop + disable drivers
 // =====================================================
 
 #include <Arduino.h>
@@ -23,28 +17,43 @@
 #include "IBusManager.h"
 
 // -----------------------------------------------------
-// Hardware Configuration
+// Hardware Configuration (ADJUST TO YOUR WIRING)
 // -----------------------------------------------------
-#define L_EN    4
-#define L_LPWM  6
-#define L_RPWM  5
 
-#define R_EN    9
-#define R_LPWM  8
-#define R_RPWM  7
+// Left Front Motor
+#define LF_EN     4
+#define LF_LPWM   6
+#define LF_RPWM   5
+
+// Left Rear Motor
+#define LR_EN     22
+#define LR_LPWM   24
+#define LR_RPWM   23
+
+// Right Front Motor
+#define RF_EN     9
+#define RF_LPWM   8
+#define RF_RPWM   7
+
+// Right Rear Motor
+#define RR_EN     26
+#define RR_LPWM   28
+#define RR_RPWM   27
 
 // -----------------------------------------------------
 // Drive Configuration
 // -----------------------------------------------------
 #define PWM_MAX    255
 #define DEADZONE   40
-#define SLEW_RATE  5   // PWM step per loop
+#define SLEW_RATE  5    // PWM step per update()
 
 // -----------------------------------------------------
-// Motor Drivers
+// Motor Driver Objects (4 Motors)
 // -----------------------------------------------------
-static BTS7960 motorL(L_EN, L_LPWM, L_RPWM);
-static BTS7960 motorR(R_EN, R_LPWM, R_RPWM);
+static BTS7960 motorLF(LF_EN, LF_LPWM, LF_RPWM);
+static BTS7960 motorLR(LR_EN, LR_LPWM, LR_RPWM);
+static BTS7960 motorRF(RF_EN, RF_LPWM, RF_RPWM);
+static BTS7960 motorRR(RR_EN, RR_LPWM, RR_RPWM);
 
 // -----------------------------------------------------
 // Internal State
@@ -57,15 +66,16 @@ static int outputR = 0;
 // -----------------------------------------------------
 // Utility Functions
 // -----------------------------------------------------
+
+// Deadzone protection
 static int applyDeadzone(int v) {
   if (abs(v) < DEADZONE) return 0;
   return v;
 }
 
-// slew ที่ไม่อนุญาตให้ "ข้ามผ่าน 0"
+// Slew limiter (no direction flip through zero)
 static int slewSafe(int current, int target) {
 
-  // ถ้ากำลังจะกลับทิศ → ต้องหยุดที่ 0 ก่อน
   if ((current > 0 && target < 0) ||
       (current < 0 && target > 0)) {
     target = 0;
@@ -78,18 +88,27 @@ static int slewSafe(int current, int target) {
     current -= SLEW_RATE;
     if (current < target) current = target;
   }
+
   return current;
 }
 
-static void setMotor(BTS7960 &motor, int pwm) {
+// Control 2 motors as a pair
+static void setMotorPair(
+  BTS7960 &m1,
+  BTS7960 &m2,
+  int pwm
+) {
   pwm = constrain(pwm, -PWM_MAX, PWM_MAX);
 
   if (pwm > 0) {
-    motor.TurnRight(pwm);
+    m1.TurnRight(pwm);
+    m2.TurnRight(pwm);
   } else if (pwm < 0) {
-    motor.TurnLeft(-pwm);
+    m1.TurnLeft(-pwm);
+    m2.TurnLeft(-pwm);
   } else {
-    motor.Stop();
+    m1.Stop();
+    m2.Stop();
   }
 }
 
@@ -98,14 +117,20 @@ static void setMotor(BTS7960 &motor, int pwm) {
 // -----------------------------------------------------
 void DriveManager::begin() {
 
-  motorL.Enable();
-  motorR.Enable();
+  motorLF.Enable();
+  motorLR.Enable();
+  motorRF.Enable();
+  motorRR.Enable();
 
-  targetL = targetR = 0;
-  outputL = outputR = 0;
+  targetL = 0;
+  targetR = 0;
+  outputL = 0;
+  outputR = 0;
 
-  motorL.Stop();
-  motorR.Stop();
+  motorLF.Stop();
+  motorLR.Stop();
+  motorRF.Stop();
+  motorRR.Stop();
 }
 
 // -----------------------------------------------------
@@ -125,8 +150,8 @@ void DriveManager::update() {
   outputL = slewSafe(outputL, targetL);
   outputR = slewSafe(outputR, targetR);
 
-  setMotor(motorL, outputL);
-  setMotor(motorR, outputR);
+  setMotorPair(motorLF, motorLR, outputL);
+  setMotorPair(motorRF, motorRR, outputR);
 }
 
 // -----------------------------------------------------
@@ -140,8 +165,8 @@ void DriveManager::stop() {
   outputL = slewSafe(outputL, 0);
   outputR = slewSafe(outputR, 0);
 
-  setMotor(motorL, outputL);
-  setMotor(motorR, outputR);
+  setMotorPair(motorLF, motorLR, outputL);
+  setMotorPair(motorRF, motorRR, outputR);
 }
 
 // -----------------------------------------------------
@@ -154,10 +179,8 @@ void DriveManager::failsafe() {
   outputL = 0;
   outputR = 0;
 
-  motorL.Stop();
-  motorR.Stop();
-
-  // FAILSAFE = disable driver ชัดเจน
-  motorL.Disable();
-  motorR.Disable();
+  motorLF.Stop(); motorLF.Disable();
+  motorLR.Stop(); motorLR.Disable();
+  motorRF.Stop(); motorRF.Disable();
+  motorRR.Stop(); motorRR.Disable();
 }
