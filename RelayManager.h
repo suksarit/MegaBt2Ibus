@@ -1,16 +1,10 @@
 // =====================================================
 // RelayManager.h
 // Auxiliary Relay Control Interface
-//
-// Responsibilities:
 // - ควบคุมรีเลย์อุปกรณ์เสริม (เช่น ไฟส่องสว่าง)
 // - ทำงานตาม SystemState (ACTIVE / DISARMED / FAILSAFE)
 // - แยกจาก EngineManager อย่างชัดเจน
-//
-// IMPORTANT:
 // - ไฟล์นี้เป็น interface เท่านั้น
-// - ห้ามมี logic การตัดสินใจหรือสั่ง hardware จริง
-// - การสั่งงานจริงต้องอยู่ใน RelayManager.cpp
 // =====================================================
 
 #pragma once

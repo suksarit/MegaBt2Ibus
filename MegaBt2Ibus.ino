@@ -1,19 +1,8 @@
 // =====================================================
 // MegaBt2Ibus.ino ฺ ฺ ฺBy TN Mower
-// Main Orchestrator (Non-Blocking, Safety-First)
-//
-// Board  : Arduino Mega 2560
-// Input  : FlySky I6X (IBUS)
-// Drive  : BTS7960 (Tank Drive)
-// Engine : Servo + Relay (Ignition / Starter)
-// Safety : ARM + FAILSAFE + Watchdog
-//
-// NOTE:
-// - ไฟล์นี้ "ไม่ทำ logic เชิงลึก"
-// - ทำหน้าที่จัดลำดับการทำงานของทุก subsystem เท่านั้น
 // =====================================================
 
-#include <Arduino.h>     // <<< สำคัญ: ให้แน่ใจว่า core Arduino ถูกโหลด
+#include <Arduino.h>     // ให้แน่ใจว่า core Arduino ถูกโหลด
 #include <avr/wdt.h>
 
 #include "SystemState.h"

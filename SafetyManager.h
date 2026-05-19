@@ -1,16 +1,9 @@
 // =====================================================
 // SafetyManager.h
-// System Safety Interface
-//
-// Responsibilities:
 // - ประเมินสถานะความปลอดภัยของระบบ
 // - ตรวจสอบ ARM command
 // - ตรวจสอบ FAILSAFE condition (เช่น IBUS lost)
-//
-// IMPORTANT:
 // - ไฟล์นี้เป็น interface เท่านั้น
-// - ห้ามสั่งงาน hardware ใด ๆ ในไฟล์นี้
-// - Logic การตัดสินใจต้องอยู่ใน SafetyManager.cpp
 // =====================================================
 
 #pragma once

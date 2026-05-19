@@ -1,13 +1,8 @@
 // =====================================================
 // SystemState.cpp
-// Central System State Decision Logic
-//
-// หน้าที่:
 // - ตัดสิน state กลางของระบบแบบ deterministic
 // - FAILSAFE มี priority สูงสุด และเป็น latch
 // - ไม่สร้าง side-effect (ไม่สั่ง hardware)
-//
-// หมายเหตุ:
 // - Logic ความปลอดภัยต้องมาจาก SafetyManager เท่านั้น
 // =====================================================
 

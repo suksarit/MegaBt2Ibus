@@ -9,7 +9,6 @@
 //
 // IMPORTANT:
 // - ไฟล์นี้เป็น interface เท่านั้น
-// - Logic การอ่าน Serial ต้องอยู่ใน IBusManager.cpp
 // =====================================================
 
 #pragma once

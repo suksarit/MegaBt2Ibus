@@ -1,7 +1,5 @@
 // =====================================================
 // EngineManager.cpp
-// Engine Control State Machine (Non-Blocking)
-//
 // Controls:
 // - Throttle Servo
 // - Ignition Relay
@@ -12,10 +10,6 @@
 // - Starter re-trigger lock (must release before retry)
 // - Throttle disabled until RUNNING
 // - Immediate shutdown on DISARM / FAILSAFE
-//
-// LIMITATION (บอกตรง):
-// - ไม่มี sensor ยืนยันว่าเครื่องติดจริง
-// - RUNNING = ignition ON หลังสตาร์ตจบเท่านั้น
 // =====================================================
 
 #include <Arduino.h>

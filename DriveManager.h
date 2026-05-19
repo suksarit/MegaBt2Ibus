@@ -1,16 +1,10 @@
 // =====================================================
 // DriveManager.h
-// Drive / Motion Control Interface (Tank Drive)
-//
-// Responsibilities:
 // - ควบคุมการขับเคลื่อนรถ (ซ้าย / ขวา)
 // - ทำงานร่วมกับ BTS7960
 // - รองรับ soft start / soft stop
 // - ตอบสนองต่อ SystemState (ACTIVE / DISARMED / FAILSAFE)
-//
-// IMPORTANT:
 // - ไฟล์นี้เป็น interface เท่านั้น
-// - Logic การคำนวณความเร็วต้องอยู่ใน DriveManager.cpp
 // =====================================================
 
 #pragma once
