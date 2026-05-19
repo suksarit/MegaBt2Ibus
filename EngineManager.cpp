@@ -20,9 +20,9 @@
 // -----------------------------------------------------
 // Hardware Configuration
 // -----------------------------------------------------
-#define SERVO_THROTTLE_PIN 9
-#define RELAY_IGNITION     22
-#define RELAY_STARTER      23
+#define SERVO_THROTTLE_PIN 30
+#define RELAY_IGNITION     31
+#define RELAY_STARTER      32
 
 // -----------------------------------------------------
 // Timing Configuration
