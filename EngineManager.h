@@ -2,19 +2,28 @@
 // EngineManager.h
 // TN Mower Engine Control Interface
 //
-// หน้าที่:
+// Responsibilities:
 // - ควบคุมเครื่องยนต์
 // - ควบคุม throttle servo
 // - ควบคุม ignition relay
 // - ควบคุม starter relay
 // - จัดการ engine state machine
 //
-// ทำงานร่วมกับ:
+// Features:
+// - Starter timeout protection
+// - Starter re-trigger lock
+// - Servo deadband filtering
+// - Servo slew limiting
+// - Safe servo write
+// - Throttle lock during crank
+//
+// Works With:
 // - SystemState
 // - IBusManager
 //
 // IMPORTANT:
 // - ไฟล์นี้เป็น interface เท่านั้น
+// - logic จริงอยู่ใน EngineManager.cpp
 // - configuration ทั้งหมดอยู่ใน Config.h
 // =====================================================
 
@@ -28,19 +37,19 @@
 // Engine Manager Class
 // =====================================================
 //
-// การเรียกใช้งาน:
+// Runtime Flow:
 //
 // begin()
-//   - เรียกครั้งเดียวใน setup()
+//   -> setup hardware + reset runtime state
 //
 // update()
-//   - เรียกเฉพาะ STATE_ACTIVE
+//   -> update engine state machine
 //
 // disarmed()
-//   - เรียกเมื่อ STATE_DISARMED
+//   -> normal safe shutdown
 //
 // failsafe()
-//   - เรียกเมื่อ STATE_FAILSAFE
+//   -> emergency shutdown
 // =====================================================
 class EngineManager {
 public:
@@ -49,11 +58,13 @@ public:
   // Initialize Engine System
   // ---------------------------------------------------
   //
-  // หน้าที่:
-  // - attach servo
-  // - ตั้งค่า relay pin
-  // - reset internal state
-  // - shutdown output ทั้งหมด
+  // Responsibilities:
+  // - attach throttle servo
+  // - initialize servo runtime state
+  // - setup ignition relay
+  // - setup starter relay
+  // - reset engine state machine
+  // - shutdown outputs
   //
   // IMPORTANT:
   // - ต้องเรียกก่อนใช้งานเสมอ
@@ -64,15 +75,25 @@ public:
   // Update Engine State Machine
   // ---------------------------------------------------
   //
-  // หน้าที่:
+  // Responsibilities:
   // - อ่านคำสั่งจาก IBusManager
-  // - ควบคุม ignition
-  // - ควบคุม starter
-  // - ควบคุม throttle servo
-  // - จัดการ engine state transition
+  // - update ignition state
+  // - update starter state
+  // - update throttle target
+  // - apply servo deadband
+  // - apply servo slew limiter
+  // - apply safe servo write
+  // - handle engine state transition
+  //
+  // Features:
+  // - non-blocking
+  // - deterministic behavior
+  // - starter timeout
+  // - starter lock
+  // - throttle safety lock
+  // - servo smoothing
   //
   // IMPORTANT:
-  // - non-blocking only
   // - ใช้เฉพาะ STATE_ACTIVE
   // ---------------------------------------------------
   static void update();
@@ -81,11 +102,13 @@ public:
   // DISARMED State
   // ---------------------------------------------------
   //
-  // หน้าที่:
+  // Responsibilities:
   // - throttle idle
   // - ignition OFF
   // - starter OFF
   // - reset engine state
+  // - reset servo target
+  // - reset runtime protection state
   //
   // ใช้เมื่อ:
   // - STATE_DISARMED
@@ -96,12 +119,14 @@ public:
   // FAILSAFE State
   // ---------------------------------------------------
   //
-  // หน้าที่:
+  // Responsibilities:
   // - emergency shutdown
-  // - force safe output
+  // - force safe outputs
+  // - reset runtime state
   //
   // IMPORTANT:
   // - safety priority สูงสุด
+  // - immediate shutdown
   // ---------------------------------------------------
   static void failsafe();
 };

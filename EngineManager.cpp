@@ -11,6 +11,9 @@
 // - Starter timeout protection
 // - Starter re-trigger lock
 // - Throttle lock during cranking
+// - Servo deadband
+// - Servo slew limiter
+// - Servo write protection
 // - Immediate shutdown on DISARM / FAILSAFE
 //
 // IMPORTANT:
@@ -63,16 +66,85 @@ static bool starterLock = false;
 static Servo throttleServo;
 
 // =====================================================
-// Convert RC Signal to Servo Angle
+// Servo Runtime State
+// =====================================================
+
+// มุมเป้าหมาย
+static int targetServoAngle =
+  THROTTLE_IDLE_ANGLE;
+
+// มุมปัจจุบัน
+static int currentServoAngle =
+  THROTTLE_IDLE_ANGLE;
+
+// กัน write ซ้ำ
+static int lastServoAngle = -1;
+
+// =====================================================
+// Safe Servo Write
 // =====================================================
 //
-// RC Input:
-//   1000 = minimum
-//   1500 = center
-//   2000 = maximum
+// IMPORTANT:
+// - write เฉพาะเมื่อ angle เปลี่ยน
+// - ลด servo jitter
+// - ลด interrupt load
+// =====================================================
+static void writeServoSafe(int angle) {
+
+  // limit range
+  angle = constrain(
+    angle,
+    THROTTLE_SERVO_MIN,
+    THROTTLE_SERVO_MAX
+  );
+
+  // write only if changed
+  if (angle != lastServoAngle) {
+
+    throttleServo.write(angle);
+
+    lastServoAngle = angle;
+  }
+}
+
+// =====================================================
+// Servo Slew Limiter
+// =====================================================
 //
-// Servo Output:
-//   0 ... 180 degree
+// IMPORTANT:
+// - ลด throttle jump
+// - ลด linkage shock
+// =====================================================
+static int servoSlew(
+  int current,
+  int target
+) {
+
+  if (current < target) {
+
+    current +=
+      THROTTLE_SERVO_SLEW;
+
+    if (current > target) {
+      current = target;
+    }
+  }
+
+  else if (current > target) {
+
+    current -=
+      THROTTLE_SERVO_SLEW;
+
+    if (current < target) {
+      current = target;
+    }
+  }
+
+  return current;
+}
+
+// =====================================================
+// Convert RC Signal to Servo Angle
 // =====================================================
 static int rcToServoAngle(int chValue) {
 
@@ -80,13 +152,36 @@ static int rcToServoAngle(int chValue) {
   int centered =
     chValue - RC_CENTER;
 
-  // scale to servo range
-  int angle =
-    ((centered + RC_RANGE) *
-     (THROTTLE_SERVO_MAX - THROTTLE_SERVO_MIN))
-    / (RC_RANGE * 2);
+  // ---------------------------------------------------
+  // Servo Deadband
+  // ---------------------------------------------------
+  if (
+    abs(centered)
+    <
+    THROTTLE_DEADBAND
+  ) {
 
-  // limit output
+    centered = 0;
+  }
+
+  // ---------------------------------------------------
+  // Scale RC -> Servo
+  // ---------------------------------------------------
+  int angle =
+    (
+      (centered + RC_RANGE)
+      *
+      (
+        THROTTLE_SERVO_MAX -
+        THROTTLE_SERVO_MIN
+      )
+    )
+    /
+    (RC_RANGE * 2);
+
+  // ---------------------------------------------------
+  // Limit Output
+  // ---------------------------------------------------
   return constrain(
     angle,
     THROTTLE_SERVO_MIN,
@@ -100,19 +195,27 @@ static int rcToServoAngle(int chValue) {
 void EngineManager::begin() {
 
   // ---------------------------------------------------
-  // attach throttle servo
+  // Attach Servo
   // ---------------------------------------------------
   throttleServo.attach(
     SERVO_THROTTLE_PIN
   );
 
-  // throttle idle
-  throttleServo.write(
+  // ---------------------------------------------------
+  // Initialize Servo Position
+  // ---------------------------------------------------
+  targetServoAngle =
+    THROTTLE_IDLE_ANGLE;
+
+  currentServoAngle =
+    THROTTLE_IDLE_ANGLE;
+
+  writeServoSafe(
     THROTTLE_IDLE_ANGLE
   );
 
   // ---------------------------------------------------
-  // relay outputs
+  // Relay Outputs
   // ---------------------------------------------------
   pinMode(RELAY_IGNITION, OUTPUT);
   pinMode(RELAY_STARTER, OUTPUT);
@@ -121,7 +224,7 @@ void EngineManager::begin() {
   digitalWrite(RELAY_STARTER, LOW);
 
   // ---------------------------------------------------
-  // reset state
+  // Reset State
   // ---------------------------------------------------
   engState = ENG_OFF;
 
@@ -131,11 +234,6 @@ void EngineManager::begin() {
 // =====================================================
 // Update Engine State Machine
 // =====================================================
-//
-// IMPORTANT:
-// - เรียกเฉพาะ STATE_ACTIVE
-// - non-blocking only
-// =====================================================
 void EngineManager::update() {
 
   // ---------------------------------------------------
@@ -144,15 +242,23 @@ void EngineManager::update() {
 
   // ignition switch
   bool ignitionCmd =
-    (IBusManager::ch(
-      IBUS_CH_IGNITION
-    ) > RC_CENTER);
+    (
+      IBusManager::ch(
+        IBUS_CH_IGNITION
+      )
+      >
+      RC_CENTER
+    );
 
   // starter switch
   bool starterCmd =
-    (IBusManager::ch(
-      IBUS_CH_STARTER
-    ) > RC_CENTER);
+    (
+      IBusManager::ch(
+        IBUS_CH_STARTER
+      )
+      >
+      RC_CENTER
+    );
 
   // ===================================================
   // Engine State Machine
@@ -164,9 +270,8 @@ void EngineManager::update() {
     // =================================================
     case ENG_OFF:
 
-      throttleServo.write(
-        THROTTLE_IDLE_ANGLE
-      );
+      targetServoAngle =
+        THROTTLE_IDLE_ANGLE;
 
       digitalWrite(RELAY_STARTER, LOW);
       digitalWrite(RELAY_IGNITION, LOW);
@@ -192,9 +297,8 @@ void EngineManager::update() {
     // =================================================
     case ENG_IGNITION_ON:
 
-      throttleServo.write(
-        THROTTLE_IDLE_ANGLE
-      );
+      targetServoAngle =
+        THROTTLE_IDLE_ANGLE;
 
       digitalWrite(RELAY_STARTER, LOW);
 
@@ -223,7 +327,6 @@ void EngineManager::update() {
         starterStartTime =
           millis();
 
-        // lock re-trigger
         starterLock = true;
 
         engState =
@@ -237,15 +340,18 @@ void EngineManager::update() {
     // =================================================
     case ENG_STARTING:
 
-      // กันเร่งระหว่าง crank
-      throttleServo.write(
-        THROTTLE_IDLE_ANGLE
-      );
+      // lock throttle during crank
+      targetServoAngle =
+        THROTTLE_IDLE_ANGLE;
 
       // timeout หรือปล่อย starter
       if (
-        (millis() - starterStartTime >=
-          ENGINE_STARTER_TIMEOUT)
+        (
+          millis() -
+          starterStartTime
+        )
+        >=
+        ENGINE_STARTER_TIMEOUT
         ||
         !starterCmd
       ) {
@@ -267,12 +373,11 @@ void EngineManager::update() {
     // =================================================
     case ENG_RUNNING:
 
-      // ignition OFF = shutdown
+      // ignition OFF
       if (!ignitionCmd) {
 
-        throttleServo.write(
-          THROTTLE_IDLE_ANGLE
-        );
+        targetServoAngle =
+          THROTTLE_IDLE_ANGLE;
 
         digitalWrite(
           RELAY_IGNITION,
@@ -295,14 +400,12 @@ void EngineManager::update() {
         // ---------------------------------------------
         if (!starterCmd) {
 
-          int angle =
+          targetServoAngle =
             rcToServoAngle(
               IBusManager::ch(
                 IBUS_CH_ENGINE_THROTTLE
               )
             );
-
-          throttleServo.write(angle);
         }
 
         // ---------------------------------------------
@@ -310,9 +413,8 @@ void EngineManager::update() {
         // ---------------------------------------------
         else {
 
-          throttleServo.write(
-            THROTTLE_IDLE_ANGLE
-          );
+          targetServoAngle =
+            THROTTLE_IDLE_ANGLE;
         }
       }
 
@@ -320,12 +422,23 @@ void EngineManager::update() {
   }
 
   // ===================================================
-  // Starter Lock Release
+  // Servo Slew Update
   // ===================================================
-  //
-  // ปลด lock เฉพาะเมื่อ:
-  // - ไม่อยู่ใน STARTING
-  // - และปล่อยปุ่ม starter แล้ว
+  currentServoAngle =
+    servoSlew(
+      currentServoAngle,
+      targetServoAngle
+    );
+
+  // ===================================================
+  // Servo Output Update
+  // ===================================================
+  writeServoSafe(
+    currentServoAngle
+  );
+
+  // ===================================================
+  // Starter Lock Release
   // ===================================================
   if (
     !starterCmd &&
@@ -341,7 +454,13 @@ void EngineManager::update() {
 // =====================================================
 void EngineManager::disarmed() {
 
-  throttleServo.write(
+  targetServoAngle =
+    THROTTLE_IDLE_ANGLE;
+
+  currentServoAngle =
+    THROTTLE_IDLE_ANGLE;
+
+  writeServoSafe(
     THROTTLE_IDLE_ANGLE
   );
 
@@ -355,10 +474,6 @@ void EngineManager::disarmed() {
 
 // =====================================================
 // FAILSAFE STATE
-// =====================================================
-//
-// IMPORTANT:
-// - highest priority
 // =====================================================
 void EngineManager::failsafe() {
 

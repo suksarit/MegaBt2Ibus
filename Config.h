@@ -159,6 +159,24 @@ constexpr int THROTTLE_SERVO_MAX = 180;
 constexpr int THROTTLE_IDLE_ANGLE = 0;
 
 // =====================================================
+// Throttle Servo Filtering
+// =====================================================
+
+// deadband กัน servo jitter จาก RC noise
+constexpr int THROTTLE_DEADBAND = 8;
+
+// servo slew rate limiter
+//
+// ค่ายิ่งต่ำ:
+//   smooth มาก
+//   response ช้าลง
+//
+// ค่ายิ่งสูง:
+//   response เร็ว
+//   throttle กระชากมากขึ้น
+constexpr int THROTTLE_SERVO_SLEW = 2;
+
+// =====================================================
 // MOTOR DRIVER PINS
 // =====================================================
 
