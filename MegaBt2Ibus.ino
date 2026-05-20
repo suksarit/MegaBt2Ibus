@@ -25,6 +25,61 @@
 #include "SafetyManager.h"
 
 // =====================================================
+// Runtime State Tracking
+// =====================================================
+static SystemState_t lastState =
+  STATE_DISARMED;
+
+// =====================================================
+// Convert Config Timeout -> AVR Watchdog Enum
+// =====================================================
+//
+// IMPORTANT:
+// - AVR watchdog ไม่รับ millisecond ตรง ๆ
+// - ต้อง map เป็น enum ของ AVR เท่านั้น
+// =====================================================
+static uint8_t watchdogConfig() {
+
+  if (WATCHDOG_TIMEOUT_MS <= 15UL) {
+    return WDTO_15MS;
+  }
+
+  if (WATCHDOG_TIMEOUT_MS <= 30UL) {
+    return WDTO_30MS;
+  }
+
+  if (WATCHDOG_TIMEOUT_MS <= 60UL) {
+    return WDTO_60MS;
+  }
+
+  if (WATCHDOG_TIMEOUT_MS <= 120UL) {
+    return WDTO_120MS;
+  }
+
+  if (WATCHDOG_TIMEOUT_MS <= 250UL) {
+    return WDTO_250MS;
+  }
+
+  if (WATCHDOG_TIMEOUT_MS <= 500UL) {
+    return WDTO_500MS;
+  }
+
+  if (WATCHDOG_TIMEOUT_MS <= 1000UL) {
+    return WDTO_1S;
+  }
+
+  if (WATCHDOG_TIMEOUT_MS <= 2000UL) {
+    return WDTO_2S;
+  }
+
+  if (WATCHDOG_TIMEOUT_MS <= 4000UL) {
+    return WDTO_4S;
+  }
+
+  return WDTO_8S;
+}
+
+// =====================================================
 // SETUP
 // =====================================================
 void setup() {
@@ -32,83 +87,43 @@ void setup() {
   // ---------------------------------------------------
   // Disable Watchdog During Boot
   // ---------------------------------------------------
-  //
-  // IMPORTANT:
-  // - ป้องกัน reset loop ระหว่าง boot
-  // ---------------------------------------------------
   wdt_disable();
 
   // ===================================================
   // Initialize Subsystems
   // ===================================================
-  //
-  // IMPORTANT:
-  // - ลำดับนี้ห้ามสลับ
-  // ===================================================
 
-  // ---------------------------------------------------
-  // Input System
-  // ---------------------------------------------------
-  //
-  // ต้องเริ่มก่อน
-  // เพราะ subsystem อื่นใช้ข้อมูล IBUS
-  // ---------------------------------------------------
   IBusManager::begin();
 
-  // ---------------------------------------------------
-  // Safety System
-  // ---------------------------------------------------
-  //
-  // ใช้ข้อมูลจาก IBusManager
-  // ---------------------------------------------------
   SafetyManager::begin();
 
-  // ---------------------------------------------------
-  // Drive System
-  // ---------------------------------------------------
   DriveManager::begin();
 
-  // ---------------------------------------------------
-  // Engine System
-  // ---------------------------------------------------
   EngineManager::begin();
 
-  // ---------------------------------------------------
-  // Auxiliary Relays
-  // ---------------------------------------------------
   RelayManager::begin();
 
   // ===================================================
   // Initial System State
   // ===================================================
-  //
-  // IMPORTANT:
-  // - boot ต้องเริ่ม DISARM เสมอ
-  // - safety priority สูงสุด
-  // ===================================================
   SystemState::set(
     STATE_DISARMED
   );
 
+  // reset runtime state tracking
+  lastState =
+    STATE_DISARMED;
+
   // ===================================================
   // Enable Watchdog
   // ===================================================
-  //
-  // IMPORTANT:
-  // - AVR watchdog ใช้ enum
-  // - ยังไม่ map จาก WATCHDOG_TIMEOUT_MS
-  // ===================================================
-  wdt_enable(WDTO_1S);
+  wdt_enable(
+    watchdogConfig()
+  );
 }
 
 // =====================================================
 // MAIN LOOP
-// =====================================================
-//
-// IMPORTANT:
-// - deterministic
-// - non-blocking
-// - no delay()
 // =====================================================
 void loop() {
 
@@ -120,45 +135,32 @@ void loop() {
   // ===================================================
   // INPUT + SAFETY UPDATE
   // ===================================================
-
-  // ---------------------------------------------------
-  // Update IBUS
-  // ---------------------------------------------------
   IBusManager::update();
 
-  // ---------------------------------------------------
-  // Update Safety Logic
-  // ---------------------------------------------------
   SafetyManager::update();
 
-  // ---------------------------------------------------
-  // Update System State
-  // ---------------------------------------------------
   SystemState::update();
+
+  // ===================================================
+  // Get Current State
+  // ===================================================
+  SystemState_t currentState =
+    SystemState::get();
 
   // ===================================================
   // SYSTEM STATE DISPATCH
   // ===================================================
-  switch (SystemState::get()) {
+  switch (currentState) {
 
     // =================================================
     // STATE_DISARMED
     // =================================================
-    //
-    // Requirements:
-    // - drive stop
-    // - engine OFF
-    // - relay OFF
-    // =================================================
     case STATE_DISARMED:
 
-      // controlled stop
       DriveManager::stop();
 
-      // shutdown engine
       EngineManager::disarmed();
 
-      // relay safe state
       RelayManager::safe();
 
       break;
@@ -166,19 +168,12 @@ void loop() {
     // =================================================
     // STATE_ACTIVE
     // =================================================
-    //
-    // Requirements:
-    // - normal operation allowed
-    // =================================================
     case STATE_ACTIVE:
 
-      // drive control
       DriveManager::update();
 
-      // engine control
       EngineManager::update();
 
-      // auxiliary relay update
       RelayManager::update();
 
       break;
@@ -186,31 +181,24 @@ void loop() {
     // =================================================
     // STATE_FAILSAFE
     // =================================================
-    //
-    // Requirements:
-    // - emergency stop
-    // - immediate shutdown
-    // =================================================
     case STATE_FAILSAFE:
 
-      // emergency motor stop
-      DriveManager::failsafe();
+      // -----------------------------------------------
+      // Execute FAILSAFE only on state entry
+      // -----------------------------------------------
+      if (lastState != STATE_FAILSAFE) {
 
-      // emergency engine shutdown
-      EngineManager::failsafe();
+        DriveManager::failsafe();
 
-      // emergency relay shutdown
-      RelayManager::failsafe();
+        EngineManager::failsafe();
+
+        RelayManager::failsafe();
+      }
 
       break;
 
     // =================================================
     // INVALID STATE PROTECTION
-    // =================================================
-    //
-    // IMPORTANT:
-    // - กัน corrupted state
-    // - fallback safe state
     // =================================================
     default:
 
@@ -220,5 +208,11 @@ void loop() {
 
       break;
   }
+
+  // ===================================================
+  // Update Runtime State Tracking
+  // ===================================================
+  lastState =
+    currentState;
 }
 
