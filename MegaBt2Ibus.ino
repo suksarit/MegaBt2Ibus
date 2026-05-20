@@ -1,9 +1,22 @@
 // =====================================================
-// MegaBt2Ibus.ino ฺ ฺ ฺBy TN Mower
+// MegaBt2Ibus.ino
+// TN Mower Main Runtime
+//
+// Responsibilities:
+// - initialize all subsystems
+// - run deterministic main loop
+// - update system state
+// - dispatch ACTIVE / DISARM / FAILSAFE behavior
+//
+// IMPORTANT:
+// - non-blocking architecture only
+// - SystemState = single source of truth
 // =====================================================
 
-#include <Arduino.h>     // ให้แน่ใจว่า core Arduino ถูกโหลด
+#include <Arduino.h>
 #include <avr/wdt.h>
+
+#include "Config.h"
 
 #include "SystemState.h"
 #include "IBusManager.h"
@@ -17,84 +30,195 @@
 // =====================================================
 void setup() {
 
-  // --- ปิด watchdog ก่อน (กันรีเซตตอนบูต) ---
+  // ---------------------------------------------------
+  // Disable Watchdog During Boot
+  // ---------------------------------------------------
+  //
+  // IMPORTANT:
+  // - ป้องกัน reset loop ระหว่าง boot
+  // ---------------------------------------------------
   wdt_disable();
 
-  // --- Initialize subsystems ---
-  // ลำดับนี้ถูกต้องแล้ว ห้ามสลับ
-  IBusManager::begin();     // ต้องมาก่อน เพื่อให้มี input
-  SafetyManager::begin();   // safety ใช้ข้อมูลจาก IBUS
-  DriveManager::begin();    // มอเตอร์
-  EngineManager::begin();   // เครื่องยนต์
-  RelayManager::begin();    // รีเลย์เสริม
+  // ===================================================
+  // Initialize Subsystems
+  // ===================================================
+  //
+  // IMPORTANT:
+  // - ลำดับนี้ห้ามสลับ
+  // ===================================================
 
-  // --- Initial state ---
-  // เริ่มต้นต้อง DISARM เสมอ (เส้นแดงด้านความปลอดภัย)
-  SystemState::set(STATE_DISARMED);
+  // ---------------------------------------------------
+  // Input System
+  // ---------------------------------------------------
+  //
+  // ต้องเริ่มก่อน
+  // เพราะ subsystem อื่นใช้ข้อมูล IBUS
+  // ---------------------------------------------------
+  IBusManager::begin();
 
-  // --- เปิด watchdog หลังทุกอย่างพร้อม ---
-  // ถ้า loop ค้างเกิน 1 วินาที → รีเซต MCU
+  // ---------------------------------------------------
+  // Safety System
+  // ---------------------------------------------------
+  //
+  // ใช้ข้อมูลจาก IBusManager
+  // ---------------------------------------------------
+  SafetyManager::begin();
+
+  // ---------------------------------------------------
+  // Drive System
+  // ---------------------------------------------------
+  DriveManager::begin();
+
+  // ---------------------------------------------------
+  // Engine System
+  // ---------------------------------------------------
+  EngineManager::begin();
+
+  // ---------------------------------------------------
+  // Auxiliary Relays
+  // ---------------------------------------------------
+  RelayManager::begin();
+
+  // ===================================================
+  // Initial System State
+  // ===================================================
+  //
+  // IMPORTANT:
+  // - boot ต้องเริ่ม DISARM เสมอ
+  // - safety priority สูงสุด
+  // ===================================================
+  SystemState::set(
+    STATE_DISARMED
+  );
+
+  // ===================================================
+  // Enable Watchdog
+  // ===================================================
+  //
+  // IMPORTANT:
+  // - AVR watchdog ใช้ enum
+  // - ยังไม่ map จาก WATCHDOG_TIMEOUT_MS
+  // ===================================================
   wdt_enable(WDTO_1S);
 }
 
 // =====================================================
-// LOOP (NON-BLOCKING)
+// MAIN LOOP
+// =====================================================
+//
+// IMPORTANT:
+// - deterministic
+// - non-blocking
+// - no delay()
 // =====================================================
 void loop() {
 
-  // รีเฟรช watchdog ทุก loop
+  // ---------------------------------------------------
+  // Refresh Watchdog
+  // ---------------------------------------------------
   wdt_reset();
 
-  // ---------- INPUT & SAFETY ----------
-  IBusManager::update();     // อ่าน IBUS (non-blocking)
-  SafetyManager::update();   // ตรวจ ARM / FAILSAFE
-  SystemState::update();     // ตัดสินใจ state กลาง
+  // ===================================================
+  // INPUT + SAFETY UPDATE
+  // ===================================================
 
-  // ---------- SYSTEM STATE ----------
+  // ---------------------------------------------------
+  // Update IBUS
+  // ---------------------------------------------------
+  IBusManager::update();
+
+  // ---------------------------------------------------
+  // Update Safety Logic
+  // ---------------------------------------------------
+  SafetyManager::update();
+
+  // ---------------------------------------------------
+  // Update System State
+  // ---------------------------------------------------
+  SystemState::update();
+
+  // ===================================================
+  // SYSTEM STATE DISPATCH
+  // ===================================================
   switch (SystemState::get()) {
 
-    // ================================
-    // DISARMED
-    // ================================
-    // - ห้ามขยับทุกอย่าง
-    // - เครื่องยนต์ต้องดับ
-    // - รีเลย์ทั้งหมด OFF
+    // =================================================
+    // STATE_DISARMED
+    // =================================================
+    //
+    // Requirements:
+    // - drive stop
+    // - engine OFF
+    // - relay OFF
+    // =================================================
     case STATE_DISARMED:
 
-      DriveManager::stop();        // มอเตอร์หยุด
-      EngineManager::disarmed();   // Ignition OFF + Throttle 0
-      RelayManager::safe();        // รีเลย์ OFF
+      // controlled stop
+      DriveManager::stop();
+
+      // shutdown engine
+      EngineManager::disarmed();
+
+      // relay safe state
+      RelayManager::safe();
 
       break;
 
-    // ================================
-    // ACTIVE (ARM แล้ว และไม่ FAILSAFE)
-    // ================================
+    // =================================================
+    // STATE_ACTIVE
+    // =================================================
+    //
+    // Requirements:
+    // - normal operation allowed
+    // =================================================
     case STATE_ACTIVE:
 
-      DriveManager::update();      // ขับเคลื่อน
-      EngineManager::update();     // ควบคุมเครื่องยนต์
-      RelayManager::update();      // ไฟ / รีเลย์เสริม
+      // drive control
+      DriveManager::update();
+
+      // engine control
+      EngineManager::update();
+
+      // auxiliary relay update
+      RelayManager::update();
 
       break;
 
-    // ================================
-    // FAILSAFE (IBUS หาย / error)
-    // ================================
-    // ต้อง "ตัดทุกอย่าง" แบบเด็ดขาด
+    // =================================================
+    // STATE_FAILSAFE
+    // =================================================
+    //
+    // Requirements:
+    // - emergency stop
+    // - immediate shutdown
+    // =================================================
     case STATE_FAILSAFE:
 
-      DriveManager::failsafe();    // มอเตอร์หยุด
-      EngineManager::failsafe();   // Ignition OFF (สำคัญมาก)
-      RelayManager::failsafe();    // รีเลย์ OFF
+      // emergency motor stop
+      DriveManager::failsafe();
+
+      // emergency engine shutdown
+      EngineManager::failsafe();
+
+      // emergency relay shutdown
+      RelayManager::failsafe();
 
       break;
 
-    // ================================
-    // กัน state หลุด (ป้องกัน bug เงียบ)
-    // ================================
+    // =================================================
+    // INVALID STATE PROTECTION
+    // =================================================
+    //
+    // IMPORTANT:
+    // - กัน corrupted state
+    // - fallback safe state
+    // =================================================
     default:
-      SystemState::set(STATE_DISARMED);
+
+      SystemState::set(
+        STATE_DISARMED
+      );
+
       break;
   }
 }

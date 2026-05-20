@@ -1,50 +1,108 @@
 // =====================================================
 // EngineManager.h
-// Engine Control Interface
+// TN Mower Engine Control Interface
 //
 // หน้าที่:
-// - ควบคุมเครื่องยนต์ (คันเร่ง, ignition, starter)
-// - ทำงานร่วมกับ SystemState (ACTIVE / DISARMED / FAILSAFE)
-// - เป็น state machine ภายในตัวเอง
+// - ควบคุมเครื่องยนต์
+// - ควบคุม throttle servo
+// - ควบคุม ignition relay
+// - ควบคุม starter relay
+// - จัดการ engine state machine
 //
-// หมายเหตุสำคัญ:
+// ทำงานร่วมกับ:
+// - SystemState
+// - IBusManager
+//
+// IMPORTANT:
 // - ไฟล์นี้เป็น interface เท่านั้น
+// - configuration ทั้งหมดอยู่ใน Config.h
 // =====================================================
 
 #pragma once
 
 #include <stdint.h>
 
-// -----------------------------------------------------
+#include "Config.h"
+
+// =====================================================
 // Engine Manager Class
-// -----------------------------------------------------
-// การเรียกใช้งาน (โดย main loop):
-//   - begin()     : เรียกครั้งเดียวใน setup()
-//   - update()    : เรียกเฉพาะ STATE_ACTIVE
-//   - disarmed()  : เรียกเมื่อ STATE_DISARMED
-//   - failsafe()  : เรียกเมื่อ STATE_FAILSAFE
-// -----------------------------------------------------
+// =====================================================
+//
+// การเรียกใช้งาน:
+//
+// begin()
+//   - เรียกครั้งเดียวใน setup()
+//
+// update()
+//   - เรียกเฉพาะ STATE_ACTIVE
+//
+// disarmed()
+//   - เรียกเมื่อ STATE_DISARMED
+//
+// failsafe()
+//   - เรียกเมื่อ STATE_FAILSAFE
+// =====================================================
 class EngineManager {
 public:
 
-  // เริ่มต้นระบบเครื่องยนต์
-  // - ตั้งค่า pin
-  // - reset state ภายใน
+  // ---------------------------------------------------
+  // Initialize Engine System
+  // ---------------------------------------------------
+  //
+  // หน้าที่:
+  // - attach servo
+  // - ตั้งค่า relay pin
+  // - reset internal state
+  // - shutdown output ทั้งหมด
+  //
+  // IMPORTANT:
+  // - ต้องเรียกก่อนใช้งานเสมอ
+  // ---------------------------------------------------
   static void begin();
 
-  // อัปเดต state machine เครื่องยนต์
-  // - ทำงานเฉพาะเมื่อระบบอยู่ใน STATE_ACTIVE
-  // - non-blocking เท่านั้น
+  // ---------------------------------------------------
+  // Update Engine State Machine
+  // ---------------------------------------------------
+  //
+  // หน้าที่:
+  // - อ่านคำสั่งจาก IBusManager
+  // - ควบคุม ignition
+  // - ควบคุม starter
+  // - ควบคุม throttle servo
+  // - จัดการ engine state transition
+  //
+  // IMPORTANT:
+  // - non-blocking only
+  // - ใช้เฉพาะ STATE_ACTIVE
+  // ---------------------------------------------------
   static void update();
 
-  // ระบบถูก DISARM
-  // - ต้องดับเครื่อง
-  // - throttle = 0
-  // - ignition / starter OFF
+  // ---------------------------------------------------
+  // DISARMED State
+  // ---------------------------------------------------
+  //
+  // หน้าที่:
+  // - throttle idle
+  // - ignition OFF
+  // - starter OFF
+  // - reset engine state
+  //
+  // ใช้เมื่อ:
+  // - STATE_DISARMED
+  // ---------------------------------------------------
   static void disarmed();
 
-  // FAILSAFE
-  // - ตัดทุกอย่างทันที
-  // - ต้องปลอดภัยสูงสุด
+  // ---------------------------------------------------
+  // FAILSAFE State
+  // ---------------------------------------------------
+  //
+  // หน้าที่:
+  // - emergency shutdown
+  // - force safe output
+  //
+  // IMPORTANT:
+  // - safety priority สูงสุด
+  // ---------------------------------------------------
   static void failsafe();
 };
+

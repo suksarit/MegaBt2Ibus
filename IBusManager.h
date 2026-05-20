@@ -1,49 +1,111 @@
 // =====================================================
 // IBusManager.h
-// FlySky IBUS Input Manager
+// TN Mower FlySky IBUS Input Interface
 //
 // Responsibilities:
-// - อ่านสัญญาณ IBUS จาก Serial
-// - เก็บค่าช่องสัญญาณล่าสุด (CH1–CH10)
-// - ตรวจสอบความมีชีวิตของสัญญาณ (IBUS alive)
+// - อ่านสัญญาณ IBUS จาก Serial1
+// - เก็บค่าช่องสัญญาณล่าสุด
+// - ตรวจสอบ signal alive
+// - validate frame ก่อนใช้งาน
 //
 // IMPORTANT:
 // - ไฟล์นี้เป็น interface เท่านั้น
+// - ไม่ทำ FAILSAFE decision ที่นี่
+// - FAILSAFE อยู่ใน SafetyManager
+//
+// Configuration:
+// - ทุกค่าคงที่อยู่ใน Config.h
 // =====================================================
 
 #pragma once
 
 #include <stdint.h>
 
+#include "Config.h"
+
+// =====================================================
+// IBus Manager Class
+// =====================================================
+//
+// การเรียกใช้งาน:
+//
+// begin()
+//   - เรียกครั้งเดียวใน setup()
+//
+// update()
+//   - เรียกทุก loop
+//
+// ch()
+//   - อ่าน channel ล่าสุด
+//
+// isAlive()
+//   - ตรวจสอบ signal timeout
+// =====================================================
 class IBusManager {
 public:
 
   // ---------------------------------------------------
-  // Lifecycle
+  // Initialize IBUS System
   // ---------------------------------------------------
-
-  // เริ่มต้น IBUS (Serial, buffer)
-  // เรียกครั้งเดียวใน setup()
+  //
+  // หน้าที่:
+  // - start Serial1
+  // - initialize IBusBM
+  // - reset channel buffer
+  // - reset runtime state
+  //
+  // IMPORTANT:
+  // - ต้องเรียกก่อนใช้งานเสมอ
+  // ---------------------------------------------------
   static void begin();
 
-  // อัปเดตข้อมูล IBUS (non-blocking)
-  // ต้องถูกเรียกทุก loop
+  // ---------------------------------------------------
+  // Update IBUS Data
+  // ---------------------------------------------------
+  //
+  // หน้าที่:
+  // - parse serial data
+  // - อ่านทุก channel
+  // - validate frame
+  // - update heartbeat
+  //
+  // IMPORTANT:
+  // - non-blocking only
+  // - ต้องถูกเรียกทุก loop
+  // ---------------------------------------------------
   static void update();
 
   // ---------------------------------------------------
-  // Data Access
+  // Read Channel
   // ---------------------------------------------------
-
-  // อ่านค่าช่องสัญญาณ (0 = CH1, 9 = CH10)
-  // คืนค่า ~1000–2000
-  // ถ้า index ผิด → คืนค่า 1500 (กลาง)
+  //
+  // index:
+  //   0 = CH1
+  //   1 = CH2
+  //   ...
+  //   9 = CH10
+  //
+  // return:
+  //   ~1000 ถึง 2000
+  //
+  // invalid index:
+  //   return RC_CENTER
+  // ---------------------------------------------------
   static int ch(int index);
 
   // ---------------------------------------------------
-  // Status
+  // IBUS Alive Status
   // ---------------------------------------------------
-
-  // ตรวจสอบว่ายังได้รับ IBUS frame ใหม่อยู่หรือไม่
-  // ใช้สำหรับ FAILSAFE เท่านั้น
+  //
+  // true:
+  //   ยัง receive valid frame อยู่
+  //
+  // false:
+  //   signal timeout
+  //
+  // IMPORTANT:
+  // - ใช้สำหรับ SafetyManager เท่านั้น
+  // ---------------------------------------------------
   static bool isAlive();
 };
+

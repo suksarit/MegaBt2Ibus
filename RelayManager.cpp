@@ -1,85 +1,156 @@
 // =====================================================
 // RelayManager.cpp
-// Auxiliary Relay Control (Implementation)
+// TN Mower Auxiliary Relay Controller
 //
 // Controls:
-// - Light relay (CH8)
+// - Light Relay
 //
-// Safety Policy:
-// - safe()     : ปิดรีเลย์แบบปกติ (DISARM)
-// - failsafe() : ปิดรีเลย์แบบบังคับ (FAILSAFE)
+// Features:
+// - Relay chatter protection
+// - Safe shutdown
+// - FAILSAFE forced shutdown
 //
-// NOTE:
-// - ไม่ตัดสิน ARM / FAILSAFE ที่นี่
+// IMPORTANT:
+// - ไม่ตัดสิน FAILSAFE ที่นี่
 // - รับคำสั่งจาก IBusManager เท่านั้น
+// - Configuration อยู่ใน Config.h
 // =====================================================
 
 #include <Arduino.h>
+
+#include "Config.h"
 #include "RelayManager.h"
 #include "IBusManager.h"
 
-// -----------------------------------------------------
-// Hardware Configuration
-// -----------------------------------------------------
-#define RELAY_LIGHT_PIN 24
+// =====================================================
+// Internal Runtime State
+// =====================================================
 
-// -----------------------------------------------------
-// Internal State
-// -----------------------------------------------------
+// สถานะ relay ล่าสุด
+// ใช้ลด relay chatter
 static bool lightState = false;
 
-// -----------------------------------------------------
-// Apply Relay Output (STATE_ACTIVE / SAFE only)
-// -----------------------------------------------------
+// =====================================================
+// Apply Relay Output
+// =====================================================
+//
+// IMPORTANT:
+// - เขียน output เฉพาะเมื่อ state เปลี่ยน
+// - ลด relay chatter
+// - ลด relay wear
+// =====================================================
 static void applyLight(bool on) {
 
-  // เขียนเฉพาะเมื่อ state เปลี่ยน (ลด relay chatter)
+  // ---------------------------------------------------
+  // update only when state changed
+  // ---------------------------------------------------
   if (lightState != on) {
+
     lightState = on;
-    digitalWrite(RELAY_LIGHT_PIN, on ? HIGH : LOW);
+
+    digitalWrite(
+      RELAY_LIGHT_PIN,
+      on ? HIGH : LOW
+    );
   }
 }
 
-// -----------------------------------------------------
+// =====================================================
 // Initialize Relay Manager
-// -----------------------------------------------------
+// =====================================================
 void RelayManager::begin() {
 
-  pinMode(RELAY_LIGHT_PIN, OUTPUT);   // ตั้งโหมดก่อน
-  digitalWrite(RELAY_LIGHT_PIN, LOW); // ปิดรีเลย์เสมอ
+  // ---------------------------------------------------
+  // setup relay output
+  // ---------------------------------------------------
+  pinMode(
+    RELAY_LIGHT_PIN,
+    OUTPUT
+  );
 
+  // ---------------------------------------------------
+  // default safe state
+  // ---------------------------------------------------
+  digitalWrite(
+    RELAY_LIGHT_PIN,
+    LOW
+  );
+
+  // ---------------------------------------------------
+  // reset runtime state
+  // ---------------------------------------------------
   lightState = false;
 }
 
-// -----------------------------------------------------
-// Update Relay State (STATE_ACTIVE only)
-// -----------------------------------------------------
+// =====================================================
+// Update Relay State
+// =====================================================
+//
+// IMPORTANT:
+// - ใช้เฉพาะ STATE_ACTIVE
+// - non-blocking only
+// =====================================================
 void RelayManager::update() {
 
-  // CH8 > 1500 = เปิดไฟ
-  bool cmdLight = (IBusManager::ch(7) > 1500);
+  // ---------------------------------------------------
+  // Read IBUS Command
+  // ---------------------------------------------------
+  bool cmdLight =
+    (
+      IBusManager::ch(
+        IBUS_CH_LIGHT
+      )
+      >
+      RC_CENTER
+    );
 
+  // ---------------------------------------------------
+  // Apply Relay Output
+  // ---------------------------------------------------
   applyLight(cmdLight);
 }
 
-// -----------------------------------------------------
-// Safe State (DISARM)
-// -----------------------------------------------------
+// =====================================================
+// Safe State
+// =====================================================
+//
+// ใช้เมื่อ:
+// - STATE_DISARMED
+// =====================================================
 void RelayManager::safe() {
 
   applyLight(false);
 }
 
-// -----------------------------------------------------
-// FAILSAFE State (Highest Priority)
-// -----------------------------------------------------
+// =====================================================
+// FAILSAFE State
+// =====================================================
+//
+// IMPORTANT:
+// - highest safety priority
+// - force relay OFF
+// =====================================================
 void RelayManager::failsafe() {
 
-  // FAILSAFE = force state ให้ปลอดภัยเสมอ
-  pinMode(RELAY_LIGHT_PIN, OUTPUT);
-  digitalWrite(RELAY_LIGHT_PIN, LOW);
+  // ---------------------------------------------------
+  // force output mode
+  // ---------------------------------------------------
+  pinMode(
+    RELAY_LIGHT_PIN,
+    OUTPUT
+  );
 
+  // ---------------------------------------------------
+  // force relay OFF
+  // ---------------------------------------------------
+  digitalWrite(
+    RELAY_LIGHT_PIN,
+    LOW
+  );
+
+  // ---------------------------------------------------
+  // reset runtime state
+  // ---------------------------------------------------
   lightState = false;
 }
-
 

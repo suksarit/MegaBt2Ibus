@@ -1,42 +1,105 @@
 // =====================================================
 // SafetyManager.h
-// - ประเมินสถานะความปลอดภัยของระบบ
+// TN Mower Safety Controller Interface
+//
+// Responsibilities:
+// - ตรวจสอบ IBUS alive
 // - ตรวจสอบ ARM command
-// - ตรวจสอบ FAILSAFE condition (เช่น IBUS lost)
+// - จัดการ FAILSAFE latch
+// - ให้ข้อมูล safety แก่ SystemState
+//
+// IMPORTANT:
 // - ไฟล์นี้เป็น interface เท่านั้น
+// - ไม่ควบคุม hardware โดยตรง
+// - ไม่สั่ง motor / engine / relay
+// - Configuration อยู่ใน Config.h
 // =====================================================
 
 #pragma once
 
 #include <stdint.h>
 
-// -----------------------------------------------------
+#include "Config.h"
+
+// =====================================================
 // Safety Manager Class
-// -----------------------------------------------------
-// การเรียกใช้งานจาก main loop:
-//   - begin()      : เรียกครั้งเดียวใน setup()
-//   - update()     : เรียกทุก loop (non-blocking)
-//   - isArmed()    : ใช้ตัดสินว่าอนุญาตให้ระบบ ACTIVE หรือไม่
-//   - isFailsafe() : ใช้ตัดสินว่าต้องเข้าสู่ FAILSAFE หรือไม่
-// -----------------------------------------------------
+// =====================================================
+//
+// การเรียกใช้งาน:
+//
+// begin()
+//   - เรียกครั้งเดียวใน setup()
+//
+// update()
+//   - เรียกทุก loop
+//
+// isArmed()
+//   - ใช้ตัดสิน ACTIVE state
+//
+// isFailsafe()
+//   - ใช้ตัดสิน FAILSAFE state
+// =====================================================
 class SafetyManager {
 public:
 
-  // เริ่มต้นระบบความปลอดภัย
-  // - reset internal state
-  // - เริ่มต้นในสถานะปลอดภัย (FAILSAFE)
+  // ---------------------------------------------------
+  // Initialize Safety System
+  // ---------------------------------------------------
+  //
+  // หน้าที่:
+  // - reset runtime state
+  // - reset timers
+  // - เริ่มต้นใน FAILSAFE
+  //
+  // IMPORTANT:
+  // - safety default = SAFE
+  // ---------------------------------------------------
   static void begin();
 
-  // อัปเดตสถานะความปลอดภัย
-  // - non-blocking
+  // ---------------------------------------------------
+  // Update Safety Status
+  // ---------------------------------------------------
+  //
+  // หน้าที่:
+  // - ตรวจสอบ IBUS alive
+  // - ตรวจสอบ ARM command
+  // - จัดการ FAILSAFE latch
+  // - update safety state
+  //
+  // IMPORTANT:
+  // - non-blocking only
   // - ต้องถูกเรียกทุก loop
+  // ---------------------------------------------------
   static void update();
 
-  // ระบบถูก ARM หรือไม่
-  // - ควรคืนค่า true เฉพาะเมื่อ "ปลอดภัยและอนุญาต"
+  // ---------------------------------------------------
+  // ARM Status
+  // ---------------------------------------------------
+  //
+  // true:
+  //   อนุญาตให้เข้า STATE_ACTIVE
+  //
+  // false:
+  //   ไม่อนุญาต ACTIVE
+  //
+  // IMPORTANT:
+  // - FAILSAFE จะ force false เสมอ
+  // ---------------------------------------------------
   static bool isArmed();
 
-  // ระบบอยู่ใน FAILSAFE หรือไม่
-  // - true = ต้องหยุดทุกอย่างทันที
+  // ---------------------------------------------------
+  // FAILSAFE Status
+  // ---------------------------------------------------
+  //
+  // true:
+  //   emergency stop required
+  //
+  // false:
+  //   normal operation allowed
+  //
+  // IMPORTANT:
+  // - FAILSAFE เป็น latch
+  // ---------------------------------------------------
   static bool isFailsafe();
 };
+
