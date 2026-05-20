@@ -2,7 +2,7 @@
 // Config.h
 // TN Mower Central Configuration File
 //
-// หน้าที่:
+// Responsibilities:
 // - รวมค่าคงที่ของทั้งระบบไว้จุดเดียว
 // - ลด magic number
 // - ป้องกัน pin conflict
@@ -20,7 +20,7 @@
 // =====================================================
 // SYSTEM VERSION
 // =====================================================
-#define TNMOWER_CONFIG_VERSION "1.0"
+#define TNMOWER_CONFIG_VERSION "1.1"
 
 // =====================================================
 // IBUS CHANNEL MAPPING
@@ -42,51 +42,26 @@
 // - IBusManager::ch(0) = CH1
 // =====================================================
 
-// CH1
-constexpr uint8_t IBUS_CH_STEER = 0;
-
-// CH2
-constexpr uint8_t IBUS_CH_DRIVE = 1;
-
-// CH3
-constexpr uint8_t IBUS_CH_ENGINE_THROTTLE = 2;
-
-// CH4
-constexpr uint8_t IBUS_CH_RESERVED_4 = 3;
-
-// CH5
-constexpr uint8_t IBUS_CH_ARM = 4;
-
-// CH6
-constexpr uint8_t IBUS_CH_IGNITION = 5;
-
-// CH7
-constexpr uint8_t IBUS_CH_STARTER = 6;
-
-// CH8
-constexpr uint8_t IBUS_CH_LIGHT = 7;
-
-// CH9
-constexpr uint8_t IBUS_CH_RESERVED_9 = 8;
-
-// CH10
-constexpr uint8_t IBUS_CH_RESERVED_10 = 9;
+constexpr uint8_t IBUS_CH_STEER            = 0;
+constexpr uint8_t IBUS_CH_DRIVE            = 1;
+constexpr uint8_t IBUS_CH_ENGINE_THROTTLE  = 2;
+constexpr uint8_t IBUS_CH_RESERVED_4       = 3;
+constexpr uint8_t IBUS_CH_ARM              = 4;
+constexpr uint8_t IBUS_CH_IGNITION         = 5;
+constexpr uint8_t IBUS_CH_STARTER          = 6;
+constexpr uint8_t IBUS_CH_LIGHT            = 7;
+constexpr uint8_t IBUS_CH_RESERVED_9       = 8;
+constexpr uint8_t IBUS_CH_RESERVED_10      = 9;
 
 // =====================================================
 // RC SIGNAL CONFIGURATION
 // =====================================================
-//
-// FlySky IBUS Standard:
-//   1000 = minimum
-//   1500 = center
-//   2000 = maximum
-// =====================================================
 
-constexpr int RC_MIN     = 1000;
-constexpr int RC_CENTER  = 1500;
-constexpr int RC_MAX     = 2000;
+constexpr int RC_MIN    = 1000;
+constexpr int RC_CENTER = 1500;
+constexpr int RC_MAX    = 2000;
 
-constexpr int RC_RANGE   = 500;
+constexpr int RC_RANGE  = 500;
 
 // =====================================================
 // PWM CONFIGURATION
@@ -97,42 +72,24 @@ constexpr int PWM_MAX = 255;
 // =====================================================
 // DRIVE TUNING
 // =====================================================
-//
-// DEADZONE
-//   - กันสติ๊กไม่นิ่ง
-//
-// SLEW_RATE
-//   - จำกัดการเปลี่ยน PWM ต่อ loop
-//   - ลดกระชาก
-// =====================================================
 
-constexpr int DRIVE_DEADZONE = 40;
-constexpr int DRIVE_SLEW_RATE = 5;
+constexpr int DRIVE_DEADZONE  = 40;
+
+// ลดกระชากตอนเปลี่ยนทิศ
+// 3 จะ smooth กว่า 5
+constexpr int DRIVE_SLEW_RATE = 3;
 
 // =====================================================
 // IBUS VALIDATION
-// =====================================================
-//
-// ช่วงที่ถือว่า valid ก่อน constrain
 // =====================================================
 
 constexpr int IBUS_VALID_MIN = 900;
 constexpr int IBUS_VALID_MAX = 2100;
 
-// จำนวน invalid frame ติดต่อกันที่ยอมรับได้
 constexpr uint8_t IBUS_ERROR_THRESHOLD = 8;
 
 // =====================================================
 // FAILSAFE TIMING
-// =====================================================
-//
-// FAILSAFE_DEAD_CONFIRM
-//   - ต้อง dead ต่อเนื่องนานเท่าไร
-//   - ก่อนเข้า FAILSAFE
-//
-// FAILSAFE_CLEAR_CONFIRM
-//   - ต้อง alive ต่อเนื่องนานเท่าไร
-//   - ก่อนออก FAILSAFE
 // =====================================================
 
 constexpr unsigned long FAILSAFE_DEAD_CONFIRM  = 150UL;
@@ -151,77 +108,94 @@ constexpr unsigned long WATCHDOG_TIMEOUT_MS = 1000UL;
 // starter timeout
 constexpr unsigned long ENGINE_STARTER_TIMEOUT = 2500UL;
 
-// servo angle
-constexpr int THROTTLE_SERVO_MIN = 0;
-constexpr int THROTTLE_SERVO_MAX = 180;
+// -----------------------------------------------------
+// Servo Angle Configuration
+// -----------------------------------------------------
+//
+// IMPORTANT:
+// - ค่าเหล่านี้อิงตาม Servo.h library
+// - ไม่ใช่มุมจริงทางกล 100%
+// - ต้อง calibrate กับ hardware จริง
+// -----------------------------------------------------
 
-// idle angle
-constexpr int THROTTLE_IDLE_ANGLE = 0;
+// จำกัดช่วง servo จริง อิงตามไลบราลี่
+constexpr int THROTTLE_SERVO_MIN = 30;
+
+// full throttle limit อิงตามไลบราลี่
+constexpr int THROTTLE_SERVO_MAX = 120;
+
+// idle จริง อิงตามไลบราลี่
+constexpr int THROTTLE_IDLE_ANGLE = 35;
 
 // =====================================================
-// Throttle Servo Filtering
+// THROTTLE SERVO FILTERING
 // =====================================================
 
-// deadband กัน servo jitter จาก RC noise
+// กัน RC jitter
 constexpr int THROTTLE_DEADBAND = 8;
 
-// servo slew rate limiter
-//
-// ค่ายิ่งต่ำ:
-//   smooth มาก
-//   response ช้าลง
-//
-// ค่ายิ่งสูง:
-//   response เร็ว
-//   throttle กระชากมากขึ้น
+// servo smoothing
 constexpr int THROTTLE_SERVO_SLEW = 2;
 
 // =====================================================
 // MOTOR DRIVER PINS
 // =====================================================
+//
+// IMPORTANT:
+// - ใช้ PWM pin จริงทั้งหมด
+// - หลีกเลี่ยง pin 13
+// - grouping ตามด้านรถ
+//
+// Mega2560 PWM Pins:
+// 2-13, 44-46
+// =====================================================
 
 // -----------------------------------------------------
-// Left Front Motor
+// LEFT FRONT MOTOR
 // -----------------------------------------------------
-constexpr uint8_t LF_EN   = 4;
-constexpr uint8_t LF_LPWM = 6;
-constexpr uint8_t LF_RPWM = 5;
+constexpr uint8_t LF_EN   = 22;
+constexpr uint8_t LF_LPWM = 5;
+constexpr uint8_t LF_RPWM = 6;
 
 // -----------------------------------------------------
-// Left Rear Motor
+// LEFT REAR MOTOR
 // -----------------------------------------------------
-constexpr uint8_t LR_EN   = 22;
-constexpr uint8_t LR_LPWM = 10;
-constexpr uint8_t LR_RPWM = 11;
+constexpr uint8_t LR_EN   = 23;
+constexpr uint8_t LR_LPWM = 7;
+constexpr uint8_t LR_RPWM = 8;
 
 // -----------------------------------------------------
-// Right Front Motor
+// RIGHT FRONT MOTOR
 // -----------------------------------------------------
-constexpr uint8_t RF_EN   = 9;
-constexpr uint8_t RF_LPWM = 8;
-constexpr uint8_t RF_RPWM = 7;
+constexpr uint8_t RF_EN   = 24;
+constexpr uint8_t RF_LPWM = 9;
+constexpr uint8_t RF_RPWM = 10;
 
 // -----------------------------------------------------
-// Right Rear Motor
+// RIGHT REAR MOTOR
 // -----------------------------------------------------
-constexpr uint8_t RR_EN   = 26;
-constexpr uint8_t RR_LPWM = 12;
-constexpr uint8_t RR_RPWM = 13;
+constexpr uint8_t RR_EN   = 25;
+constexpr uint8_t RR_LPWM = 11;
+constexpr uint8_t RR_RPWM = 12;
 
 // =====================================================
 // ENGINE CONTROL PINS
 // =====================================================
 
+// Servo library ไม่ต้องใช้ PWM pin
 constexpr uint8_t SERVO_THROTTLE_PIN = 30;
 
+// ignition relay
 constexpr uint8_t RELAY_IGNITION = 31;
+
+// starter relay
 constexpr uint8_t RELAY_STARTER  = 32;
 
 // =====================================================
 // AUXILIARY RELAY PINS
 // =====================================================
 
-constexpr uint8_t RELAY_LIGHT_PIN = 24;
+constexpr uint8_t RELAY_LIGHT_PIN = 33;
 
 // =====================================================
 // SERIAL CONFIGURATION
@@ -232,10 +206,6 @@ constexpr unsigned long IBUS_BAUDRATE = 115200UL;
 // =====================================================
 // IBUS TIMEOUT
 // =====================================================
-//
-// ถ้าไม่มี valid frame ภายในเวลานี้
-// ถือว่าสัญญาณหาย
-// =====================================================
 
 constexpr unsigned long IBUS_SIGNAL_TIMEOUT = 500UL;
 
@@ -243,7 +213,6 @@ constexpr unsigned long IBUS_SIGNAL_TIMEOUT = 500UL;
 // SYSTEM SAFETY
 // =====================================================
 
-// boot default state
 constexpr bool SYSTEM_BOOT_FAILSAFE = true;
 
 // =====================================================

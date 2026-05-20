@@ -45,15 +45,9 @@ static int outputR = 0;
 // =====================================================
 // Deadzone Protection
 // =====================================================
-//
-// หน้าที่:
-// - กรอง stick jitter
-// - ลดการไหลของรถตอนปล่อย stick
-// =====================================================
 static int applyDeadzone(int v) {
 
-  // ถ้าค่าใกล้ 0 มากเกินไป
-  // ถือว่าเป็น neutral
+  // stick jitter protection
   if (abs(v) < DRIVE_DEADZONE) {
     return 0;
   }
@@ -64,60 +58,51 @@ static int applyDeadzone(int v) {
 // =====================================================
 // Convert RC Signal to PWM
 // =====================================================
-//
-// RC Input:
-//   1000 = full reverse
-//   1500 = center
-//   2000 = full forward
-//
-// PWM Output:
-//   -255 ... 0 ... +255
-// =====================================================
 static int rcToPwm(int chValue) {
 
-  // ---------------------------------------------------
   // centered around 0
-  // ---------------------------------------------------
-  int centered = chValue - RC_CENTER;
+  int centered =
+    chValue - RC_CENTER;
 
-  // ---------------------------------------------------
   // scale to PWM range
-  // ---------------------------------------------------
-  int pwm = (centered * PWM_MAX) / RC_RANGE;
+  int pwm =
+    (centered * PWM_MAX)
+    / RC_RANGE;
 
-  // ---------------------------------------------------
   // limit output
-  // ---------------------------------------------------
-  return constrain(pwm, -PWM_MAX, PWM_MAX);
+  return constrain(
+    pwm,
+    -PWM_MAX,
+    PWM_MAX
+  );
 }
 
 // =====================================================
 // Slew Rate Limiter
 // =====================================================
-//
-// หน้าที่:
-// - จำกัดการเปลี่ยน PWM ต่อ loop
-// - ลดกระชาก
-// - กัน reverse ทันที
-// =====================================================
-static int slewSafe(int current, int target) {
+static int slewSafe(
+  int current,
+  int target
+) {
 
   // ---------------------------------------------------
-  // ถ้าจะกลับทิศ
-  // ต้องผ่าน 0 ก่อนเสมอ
+  // direction reversal protection
   // ---------------------------------------------------
-  if ((current > 0 && target < 0) ||
-      (current < 0 && target > 0)) {
+  if (
+    (current > 0 && target < 0) ||
+    (current < 0 && target > 0)
+  ) {
 
     target = 0;
   }
 
   // ---------------------------------------------------
-  // Ramp Up
+  // ramp up
   // ---------------------------------------------------
   if (current < target) {
 
-    current += DRIVE_SLEW_RATE;
+    current +=
+      DRIVE_SLEW_RATE;
 
     if (current > target) {
       current = target;
@@ -125,11 +110,12 @@ static int slewSafe(int current, int target) {
   }
 
   // ---------------------------------------------------
-  // Ramp Down
+  // ramp down
   // ---------------------------------------------------
   else if (current > target) {
 
-    current -= DRIVE_SLEW_RATE;
+    current -=
+      DRIVE_SLEW_RATE;
 
     if (current < target) {
       current = target;
@@ -142,13 +128,6 @@ static int slewSafe(int current, int target) {
 // =====================================================
 // Set Motor Pair
 // =====================================================
-//
-// m1,m2:
-//   มอเตอร์ซ้ายหรือขวา
-//
-// pwm:
-//   -255 ... +255
-// =====================================================
 static void setMotorPair(
   BTS7960 &m1,
   BTS7960 &m2,
@@ -156,12 +135,16 @@ static void setMotorPair(
 ) {
 
   // ---------------------------------------------------
-  // limit PWM
+  // limit pwm
   // ---------------------------------------------------
-  pwm = constrain(pwm, -PWM_MAX, PWM_MAX);
+  pwm = constrain(
+    pwm,
+    -PWM_MAX,
+    PWM_MAX
+  );
 
   // ---------------------------------------------------
-  // Forward
+  // forward
   // ---------------------------------------------------
   if (pwm > 0) {
 
@@ -170,7 +153,7 @@ static void setMotorPair(
   }
 
   // ---------------------------------------------------
-  // Reverse
+  // reverse
   // ---------------------------------------------------
   else if (pwm < 0) {
 
@@ -179,7 +162,7 @@ static void setMotorPair(
   }
 
   // ---------------------------------------------------
-  // Stop
+  // stop
   // ---------------------------------------------------
   else {
 
@@ -194,7 +177,7 @@ static void setMotorPair(
 void DriveManager::begin() {
 
   // ---------------------------------------------------
-  // Enable BTS7960 Drivers
+  // enable BTS7960 drivers
   // ---------------------------------------------------
   motorLF.Enable();
   motorLR.Enable();
@@ -203,7 +186,7 @@ void DriveManager::begin() {
   motorRR.Enable();
 
   // ---------------------------------------------------
-  // Reset Runtime State
+  // reset runtime state
   // ---------------------------------------------------
   targetL = 0;
   targetR = 0;
@@ -212,7 +195,7 @@ void DriveManager::begin() {
   outputR = 0;
 
   // ---------------------------------------------------
-  // Stop All Motors
+  // stop all motors
   // ---------------------------------------------------
   motorLF.Stop();
   motorLR.Stop();
@@ -226,14 +209,31 @@ void DriveManager::begin() {
 // =====================================================
 void DriveManager::update() {
 
+  // ===================================================
+  // Ensure BTS7960 Enabled
+  //
+  // IMPORTANT:
+  // - recover after FAILSAFE
+  // - prevent driver lockout
+  // ===================================================
+  motorLF.Enable();
+  motorLR.Enable();
+
+  motorRF.Enable();
+  motorRR.Enable();
+
   // ---------------------------------------------------
   // Read RC Channels
   // ---------------------------------------------------
   int rawSteer =
-    IBusManager::ch(IBUS_CH_STEER);
+    IBusManager::ch(
+      IBUS_CH_STEER
+    );
 
   int rawThrottle =
-    IBusManager::ch(IBUS_CH_DRIVE);
+    IBusManager::ch(
+      IBUS_CH_DRIVE
+    );
 
   // ---------------------------------------------------
   // Convert RC to PWM
@@ -272,10 +272,16 @@ void DriveManager::update() {
   // Apply Slew Limiter
   // ---------------------------------------------------
   outputL =
-    slewSafe(outputL, targetL);
+    slewSafe(
+      outputL,
+      targetL
+    );
 
   outputR =
-    slewSafe(outputR, targetR);
+    slewSafe(
+      outputR,
+      targetR
+    );
 
   // ---------------------------------------------------
   // Send PWM to Motors
@@ -308,10 +314,16 @@ void DriveManager::stop() {
   // soft stop
   // ---------------------------------------------------
   outputL =
-    slewSafe(outputL, 0);
+    slewSafe(
+      outputL,
+      0
+    );
 
   outputR =
-    slewSafe(outputR, 0);
+    slewSafe(
+      outputR,
+      0
+    );
 
   // ---------------------------------------------------
   // update motors
@@ -331,11 +343,6 @@ void DriveManager::stop() {
 
 // =====================================================
 // FAILSAFE STOP
-// =====================================================
-//
-// IMPORTANT:
-// - emergency stop
-// - disable drivers
 // =====================================================
 void DriveManager::failsafe() {
 
@@ -365,5 +372,5 @@ void DriveManager::failsafe() {
 
   motorRF.Disable();
   motorRR.Disable();
-}  
+}
 
