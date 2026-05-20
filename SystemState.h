@@ -50,3 +50,5 @@ public:
   // (เช่น ARM, FAILSAFE)
   static void update();
 };
+
+

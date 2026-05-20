@@ -107,3 +107,5 @@ bool SafetyManager::isArmed() {
 bool SafetyManager::isFailsafe() {
   return failsafe;
 }
+
+

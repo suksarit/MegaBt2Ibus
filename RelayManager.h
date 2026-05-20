@@ -39,3 +39,5 @@ public:
   // - ต้องเป็นสถานะที่ปลอดภัยสูงสุด
   static void failsafe();
 };
+
+

@@ -153,3 +153,4 @@ bool IBusManager::isAlive() {
   // ถือว่าสัญญาณหาย
   return (millis() - lastUpdateMs) < 500;
 }
+

@@ -56,6 +56,20 @@
 #define SLEW_RATE  5
 
 // -----------------------------------------------------
+// RC Configuration
+// -----------------------------------------------------
+// RC range:
+//   1000 = full reverse / left
+//   1500 = center
+//   2000 = full forward / right
+//
+// หลัง centered:
+//   -500 ... 0 ... +500
+// -----------------------------------------------------
+#define RC_CENTER  1500
+#define RC_RANGE   500
+
+// -----------------------------------------------------
 // Motor Driver Objects
 // -----------------------------------------------------
 static BTS7960 motorLF(LF_EN, LF_LPWM, LF_RPWM);
@@ -84,6 +98,26 @@ static int applyDeadzone(int v) {
   }
 
   return v;
+}
+
+// -----------------------------------------------------
+// Convert RC channel to centered PWM
+//
+// Input:
+//   1000 -> -255
+//   1500 -> 0
+//   2000 -> +255
+// -----------------------------------------------------
+static int rcToPwm(int chValue) {
+
+  // centered around 0
+  int centered = chValue - RC_CENTER;
+
+  // scale to PWM range
+  int pwm = (centered * PWM_MAX) / RC_RANGE;
+
+  // limit output
+  return constrain(pwm, -PWM_MAX, PWM_MAX);
 }
 
 // -----------------------------------------------------
@@ -189,29 +223,27 @@ void DriveManager::begin() {
 // -----------------------------------------------------
 void DriveManager::update() {
 
-  // อ่านค่า steering
-  int steer = map(
-    IBusManager::ch(0),
-    1000,
-    2000,
-    -PWM_MAX,
-    PWM_MAX
-  );
+  // ---------------------------------------------------
+  // อ่านค่า raw channel
+  // ---------------------------------------------------
+  int rawSteer    = IBusManager::ch(0);
+  int rawThrottle = IBusManager::ch(1);
 
-  // อ่านค่า throttle
-  int throttle = map(
-    IBusManager::ch(1),
-    1000,
-    2000,
-    -PWM_MAX,
-    PWM_MAX
-  );
+  // ---------------------------------------------------
+  // Convert RC signal to PWM
+  // ---------------------------------------------------
+  int steer    = rcToPwm(rawSteer);
+  int throttle = rcToPwm(rawThrottle);
 
-  // apply deadzone
+  // ---------------------------------------------------
+  // Apply deadzone
+  // ---------------------------------------------------
   steer = applyDeadzone(steer);
   throttle = applyDeadzone(throttle);
 
-  // differential mixing
+  // ---------------------------------------------------
+  // Differential mixing
+  // ---------------------------------------------------
   targetL = constrain(
     throttle + steer,
     -PWM_MAX,
@@ -224,11 +256,15 @@ void DriveManager::update() {
     PWM_MAX
   );
 
-  // apply slew limiter
+  // ---------------------------------------------------
+  // Apply slew limiter
+  // ---------------------------------------------------
   outputL = slewSafe(outputL, targetL);
   outputR = slewSafe(outputR, targetR);
 
-  // ส่ง PWM ไปมอเตอร์
+  // ---------------------------------------------------
+  // Send PWM to motors
+  // ---------------------------------------------------
   setMotorPair(
     motorLF,
     motorLR,
@@ -295,3 +331,4 @@ void DriveManager::failsafe() {
   motorRR.Stop();
   motorRR.Disable();
 }
+
