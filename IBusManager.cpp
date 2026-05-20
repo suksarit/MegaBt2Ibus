@@ -8,6 +8,12 @@
 // - ตรวจสอบ signal alive
 // - validate frame
 //
+// Features:
+// - partial frame protection
+// - invalid frame threshold
+// - stale frame hold
+// - transient noise tolerance
+//
 // IMPORTANT:
 // - ไม่ทำ FAILSAFE ที่นี่
 // - FAILSAFE decision อยู่ที่ SafetyManager
@@ -52,7 +58,7 @@ static int channels[10] = {
 // เวลา receive valid frame ล่าสุด
 static unsigned long lastUpdateMs = 0;
 
-// ตัวนับ invalid frame
+// ตัวนับ invalid frame ต่อเนื่อง
 static uint8_t errorCount = 0;
 
 // =====================================================
@@ -106,10 +112,17 @@ void IBusManager::update() {
 
   // ---------------------------------------------------
   // Temporary buffer
+  //
   // IMPORTANT:
   // - ป้องกัน partial frame update
+  // - commit หลัง validate ครบเท่านั้น
   // ---------------------------------------------------
   int tempChannels[10];
+
+  // ---------------------------------------------------
+  // Frame validation flag
+  // ---------------------------------------------------
+  bool frameValid = true;
 
   // ===================================================
   // Read + Validate All Channels
@@ -130,18 +143,11 @@ void IBusManager::update() {
       v > IBUS_VALID_MAX
     ) {
 
-      // -----------------------------------------------
-      // Increase error counter
-      // -----------------------------------------------
-      if (errorCount < 255) {
-        errorCount++;
-      }
+      // invalid frame
+      frameValid = false;
 
-      // -----------------------------------------------
-      // Invalid frame
       // discard both partial + full update
-      // -----------------------------------------------
-      return;
+      break;
     }
 
     // -------------------------------------------------
@@ -160,16 +166,56 @@ void IBusManager::update() {
   }
 
   // ===================================================
+  // Invalid Frame Handling
+  // ===================================================
+  if (!frameValid) {
+
+    // -------------------------------------------------
+    // increase invalid counter
+    // -------------------------------------------------
+    if (errorCount < 255) {
+
+      errorCount++;
+    }
+
+    // -------------------------------------------------
+    // Temporary invalid frame
+    //
+    // IMPORTANT:
+    // - hold previous valid frame
+    // - กัน transient noise
+    // -------------------------------------------------
+    if (
+      errorCount <
+      IBUS_ERROR_THRESHOLD
+    ) {
+
+      return;
+    }
+
+    // -------------------------------------------------
+    // Persistent invalid frame
+    //
+    // IMPORTANT:
+    // - ไม่ update heartbeat
+    // - ปล่อย timeout mechanism ทำงาน
+    // - SafetyManager จะเข้า FAILSAFE เอง
+    // -------------------------------------------------
+    return;
+  }
+
+  // ===================================================
   // Valid Frame
   // ===================================================
 
   // ---------------------------------------------------
-  // Reset error counter
+  // Reset invalid counter
   // ---------------------------------------------------
   errorCount = 0;
 
   // ---------------------------------------------------
-  // Commit temp buffer
+  // Commit validated frame
+  //
   // IMPORTANT:
   // - commit only after full validation
   // ---------------------------------------------------
@@ -181,6 +227,9 @@ void IBusManager::update() {
 
   // ---------------------------------------------------
   // Update heartbeat
+  //
+  // IMPORTANT:
+  // - valid frame only
   // ---------------------------------------------------
   lastUpdateMs =
     millis();

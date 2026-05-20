@@ -17,7 +17,6 @@
 #include <avr/wdt.h>
 
 #include "Config.h"
-
 #include "SystemState.h"
 #include "IBusManager.h"
 #include "DriveManager.h"
