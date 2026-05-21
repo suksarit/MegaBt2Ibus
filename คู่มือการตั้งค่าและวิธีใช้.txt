@@ -1,54 +1,120 @@
 ======================================================================
-คู่มือการตั้งค่า การต่อสาย และการใช้งาน
-ระบบควบคุมรถ TN Mower (MegaBt2Ibus) [ภาษาไทย]
+TN Mower Control System
+MegaBt2Ibus
+คู่มือการติดตั้ง การต่อสาย และการใช้งาน (THAI)
+อ้างอิงตามโค้ดจริงปัจจุบัน
 ======================================================================
 
-ระบบนี้ใช้ Arduino Mega 2560 รับสัญญาณ FlySky IBUS
-ควบคุมมอเตอร์ผ่าน BTS7960 และควบคุมเครื่องยนต์ด้วย Servo และ Relay
-มีระบบ ARM / DISARM / FAILSAFE ทำงานตรงตามโค้ดจริง
-
-======================================================================
-1. อุปกรณ์ที่ต้องใช้
-======================================================================
-
+ระบบนี้ใช้:
 - Arduino Mega 2560
-- รีโมท FlySky i6X
-- รีซีฟเวอร์ FlySky ที่รองรับ IBUS (เช่น FS-iA6B)
-- BTS7960 จำนวน 2 ตัว (ซ้าย / ขวา)
-- มอเตอร์ DC ซ้าย / ขวา
-- Servo คันเร่งเครื่องยนต์
-- Relay:
-  - Ignition
-  - Starter
-  - Light
-- แหล่งจ่ายไฟ:
-  - มอเตอร์
-  - Servo
-  - Logic (Arduino)
+- FlySky IBUS
+- BTS7960
+- Servo คันเร่ง
+- Relay ควบคุมเครื่องยนต์
 
-ข้อสำคัญ:
+Architecture:
+- Non-blocking
+- Deterministic loop
+- ARM / DISARM
+- FAILSAFE latch
+- Differential drive
+- Soft start / stop
+
+IMPORTANT:
+- ระบบนี้ยังเป็น Open-loop
+- ไม่มี encoder feedback
+- ไม่มี current limiting
+- ไม่มี hardware emergency stop
+- ต้องมีผู้ควบคุมตลอดเวลา
+
+======================================================================
+1. REQUIRED HARDWARE
+======================================================================
+
+[Controller]
+- Arduino Mega 2560
+
+[RC System]
+- FlySky i6X
+- FlySky Receiver ที่รองรับ IBUS
+  เช่น FS-iA6B
+
+[Motor Driver]
+- BTS7960 จำนวน 4 Channel
+  (2 บอร์ดแบบ Dual หรือ 4 บอร์ดเดี่ยว)
+
+[Drive Motors]
+- มอเตอร์ DC ซ้ายหน้า
+- มอเตอร์ DC ซ้ายหลัง
+- มอเตอร์ DC ขวาหน้า
+- มอเตอร์ DC ขวาหลัง
+
+[Engine Control]
+- Servo คันเร่ง
+- Ignition Relay
+- Starter Relay
+
+[Auxiliary]
+- Light Relay
+
+[Power]
+- Battery สำหรับมอเตอร์
+- DC-DC สำหรับ Arduino
+- Separate power supply สำหรับ Servo
+
+======================================================================
+2. IMPORTANT POWER RULES
+======================================================================
+
+IMPORTANT:
 - GND ทุกระบบต้องต่อร่วมกัน
-- ห้ามจ่ายไฟ Servo จากขา 5V ของ Arduino โดยตรง
+
+ห้าม:
+- จ่าย Servo จาก 5V Arduino โดยตรง
+- ใช้ไฟมอเตอร์ร่วมกับ Arduino โดยไม่มี DC-DC
+- เดินสาย IBUS ขนานกับสายมอเตอร์กำลัง
+
+แนะนำ:
+- ใช้ DC-DC แยกสำหรับ Logic
+- ใช้ fuse ทุกระบบ
+- ติด heatsink BTS7960
+- ใช้สายไฟขนาดเหมาะสม
+- ติด emergency stop จริงแบบ hardware
 
 ======================================================================
-2. การตั้งค่ารีโมท FlySky i6X
+3. SYSTEM STATE
 ======================================================================
 
-โหมด:
-- Stick Mode: Mode 2
+[STATE_DISARMED]
+- ระบบยังไม่ ARM
+- มอเตอร์หยุด
+- เครื่องยนต์ดับ
+- Relay OFF
 
-การกำหนด Channel:
+[STATE_ACTIVE]
+- ระบบพร้อมขับเคลื่อน
+- มอเตอร์ทำงานได้
+- เครื่องยนต์ควบคุมได้
 
-CH1 : Stick ขวา ซ้าย/ขวา   → เลี้ยวรถ
-CH2 : Stick ขวา ขึ้น/ลง    → เดินหน้า / ถอยหลัง
-CH3 : Stick ซ้าย ขึ้น/ลง   → คันเร่งเครื่องยนต์ (Servo)
-CH4 : ไม่ใช้
-CH5 : Switch               → ARM / DISARM
-CH6 : Switch               → Ignition ON / OFF
-CH7 : Switch               → Starter
-CH8 : Switch               → ไฟ / รีเลย์เสริม
+[STATE_FAILSAFE]
+- เกิดสัญญาณผิดปกติ
+- ระบบสั่งหยุด actuator
+- ต้อง DISARM ก่อนกลับมาใช้งาน
 
-เงื่อนไขในโค้ด:
+======================================================================
+4. FLYSKY CHANNEL MAPPING
+======================================================================
+
+CH1 = Steering
+CH2 = Drive Throttle
+CH3 = Engine Throttle Servo
+CH4 = Reserved
+CH5 = ARM / DISARM
+CH6 = Ignition
+CH7 = Starter
+CH8 = Light Relay
+
+Logic:
 - ค่า > 1500 = ON
 - ค่า < 1500 = OFF
 
@@ -58,251 +124,333 @@ CH8 : Switch               → ไฟ / รีเลย์เสริม
 - CH7 → SWC
 - CH8 → SWD
 
-======================================================================
-3. การต่อ Receiver → Arduino Mega
-======================================================================
-
-IBUS  → RX1 (Pin 19)
-VCC   → 5V
-GND   → GND
-
-ข้อควรระวัง:
-- ใช้ Serial1 เท่านั้น
-- ห้ามต่อ IBUS เข้าขา RX0 / TX0
+Stick Mode:
+- Mode 2
 
 ======================================================================
-4. การต่อระบบขับเคลื่อน (BTS7960)
+5. RECEIVER → ARDUINO WIRING
 ======================================================================
 
-มอเตอร์ซ้าย:
-- EN    → Pin 4
-- LPWM  → Pin 6
-- RPWM  → Pin 5
-
-มอเตอร์ขวา:
-- EN    → Pin 9
-- LPWM  → Pin 8
-- RPWM  → Pin 7
-
-ไฟมอเตอร์:
-- ใช้แหล่งจ่ายไฟแยก
-- GND ต้องร่วมกับ Arduino
-
-======================================================================
-5. การต่อระบบเครื่องยนต์
-======================================================================
-
-Servo คันเร่ง:
-- Signal → Pin 9
-- VCC    → 5–6V (แหล่งจ่ายแยก)
-- GND    → GND
-
-Relay:
-- Ignition Relay → Pin 22
-- Starter Relay  → Pin 23
-- Light Relay    → Pin 24
-
-======================================================================
-6. ลำดับการทำงานของระบบ
-======================================================================
-
-เริ่มต้น:
-- เปิด Arduino
-- เปิดรีโมท
-
-สถานะเริ่มต้น:
-- FAILSAFE = ON
-- STATE = DISARMED
-- มอเตอร์หยุด
-- เครื่องยนต์ดับ
-- รีเลย์ทั้งหมด OFF
-
-ปลด FAILSAFE:
-- ปิด ARM (CH5 OFF)
-- IBUS ต้องนิ่งต่อเนื่อง
-- FAILSAFE ถูกปลด
-- STATE ยังเป็น DISARMED
-
-ARM ระบบ:
-- CH5 ON
-- STATE → ACTIVE
-- พร้อมใช้งาน
-
-======================================================================
-7. การขับเคลื่อนรถ
-======================================================================
-
-Stick ขวา:
-- ขึ้น/ลง   → เดินหน้า / ถอยหลัง
-- ซ้าย/ขวา → เลี้ยว
-
-คุณสมบัติ:
-- Deadzone
-- Soft start / stop
-- ป้องกันการกลับทิศทันที
-- FAILSAFE ตัด BTS7960 ทันที
-
-======================================================================
-8. การสตาร์ตเครื่องยนต์
-======================================================================
-
-ลำดับที่ถูกต้อง:
-1) ARM (CH5 ON)
-2) Ignition ON (CH6 ON)
-3) กด Starter (CH7) ไม่เกิน 2.5 วินาที
-4) ปล่อย Starter
-5) ควบคุมคันเร่งด้วย CH3
-
-หมายเหตุ:
-- ไม่มีเซ็นเซอร์ตรวจว่าเครื่องติดจริง
-- ถือว่า RUNNING เมื่อ Ignition ยัง ON
-
-======================================================================
-9. รีเลย์ไฟ
-======================================================================
-
-CH8 ON  → ไฟติด
-CH8 OFF → ไฟดับ
-
-FAILSAFE:
-- ไฟถูกปิดทันที
-
-======================================================================
-10. FAILSAFE
-======================================================================
-
-เกิดเมื่อ:
-- รีโมทปิด
-- IBUS หาย
-- สัญญาณเสียต่อเนื่อง
-
-ผลลัพธ์ภายใน ~150–500 ms:
-- มอเตอร์หยุด
-- Ignition OFF
-- Starter OFF
-- รีเลย์ทั้งหมด OFF
-
-การกู้คืน:
-- ต้อง DISARM
-- แล้ว ARM ใหม่
-- ระบบไม่กลับมาทำงานเอง
-
-======================================================================
-11. ข้อจำกัดของระบบ
-======================================================================
-
-- ไม่มี sensor feedback
-- ไม่มี current limit
-- ไม่มี engine RPM detect
-- เป็นระบบ open-loop
-- ต้องมีผู้ควบคุมตลอดเวลา
-
-======================================================================
-Arduino Mega 2560 Pin Map
-======================================================================
-
-[IBUS]
-RX1 (19) → Receiver IBUS
-
-[Drive - BTS7960]
-Motor Left:
-  EN    → Pin 4
-  LPWM  → Pin 6
-  RPWM  → Pin 5
-
-Motor Right:
-  EN    → Pin 9
-  LPWM  → Pin 8
-  RPWM  → Pin 7
-
-[Engine]
-Throttle Servo → Pin 9
-Ignition Relay → Pin 22
-Starter Relay  → Pin 23
-
-[Auxiliary]
-Light Relay    → Pin 24
-
-======================================================================
-Required Libraries (Arduino IDE)
-======================================================================
-
-- Arduino AVR Core (built-in)
-- Servo (built-in)
-- IBusBM by bmellink
-  https://github.com/bmellink/IBusBM
-- BTS7960 by Rob Tillaart
-  https://github.com/RobTillaart/BTS7960
-
-======================================================================
-======================================================================
-TN Mower Control System (MegaBt2Ibus) – ENGLISH
-======================================================================
-
-This document provides setup, wiring, and operation instructions
-for the TN Mower control system based on Arduino Mega 2560
-using FlySky IBUS remote control.
-
-======================================================================
-1. Required Hardware
-======================================================================
-
-- Arduino Mega 2560
-- FlySky i6X Transmitter
-- FlySky IBUS Receiver (FS-iA6B or compatible)
-- BTS7960 Motor Driver x2
-- DC Motors (Left / Right)
-- Throttle Servo
-- Relays: Ignition, Starter, Light
-- Separate power supplies for motor, servo, and logic
-
-IMPORTANT:
-- All grounds must be common
-- Do NOT power servo from Arduino 5V pin
-
-======================================================================
-2. FlySky i6X Configuration
-======================================================================
-
-- Stick Mode: Mode 2
-
-Channel Assignment:
-
-CH1 : Steering
-CH2 : Drive Throttle
-CH3 : Engine Throttle Servo
-CH4 : Not Used
-CH5 : ARM / DISARM
-CH6 : Ignition
-CH7 : Starter
-CH8 : Light Relay
-
-Logic:
-- Value > 1500 = ON
-- Value < 1500 = OFF
-
-======================================================================
-3. Receiver Wiring
-======================================================================
+[IBUS Receiver]
 
 IBUS → RX1 (Pin 19)
 VCC  → 5V
 GND  → GND
 
-Use Serial1 only.
+IMPORTANT:
+- ใช้ Serial1 เท่านั้น
+- ห้ามใช้ RX0/TX0
+- RX0/TX0 ใช้สำหรับ USB Serial
 
 ======================================================================
-4. FAILSAFE Summary
+6. MOTOR DRIVER PIN MAP
 ======================================================================
 
-If IBUS is lost:
-- Motors stop immediately
-- Engine shuts down
-- All relays turn OFF
+======================================================================
+LEFT FRONT MOTOR
+======================================================================
 
-System requires DISARM then ARM to resume.
-Automatic recovery is NOT allowed.
+LF_EN   → Pin 22
+LF_LPWM → Pin 5
+LF_RPWM → Pin 6
 
 ======================================================================
-End of Document
+LEFT REAR MOTOR
+======================================================================
+
+LR_EN   → Pin 23
+LR_LPWM → Pin 7
+LR_RPWM → Pin 8
+
+======================================================================
+RIGHT FRONT MOTOR
+======================================================================
+
+RF_EN   → Pin 24
+RF_LPWM → Pin 9
+RF_RPWM → Pin 10
+
+======================================================================
+RIGHT REAR MOTOR
+======================================================================
+
+RR_EN   → Pin 25
+RR_LPWM → Pin 11
+RR_RPWM → Pin 12
+
+======================================================================
+7. ENGINE CONTROL PIN MAP
+======================================================================
+
+Throttle Servo Signal
+→ Pin 30
+
+Ignition Relay
+→ Pin 31
+
+Starter Relay
+→ Pin 32
+
+Light Relay
+→ Pin 33
+
+======================================================================
+8. POWER WIRING RECOMMENDATION
+======================================================================
+
+[Motor Power]
+Battery → BTS7960 Motor Power
+
+[Logic Power]
+Battery → DC-DC 5V → Arduino Mega
+
+[Servo Power]
+Battery → Separate 5V/6V BEC → Servo
+
+IMPORTANT:
+- Servo power ต้องแยก
+- GND ต้อง common
+- ใช้ capacitor ใกล้ Arduino
+- ใช้ fuse ทุก supply line
+
+======================================================================
+9. SYSTEM BOOT SEQUENCE
+======================================================================
+
+ลำดับที่ถูกต้อง:
+
+1. เปิดรีโมท FlySky
+2. ตรวจสอบว่า ARM = OFF
+3. เปิดระบบ TN Mower
+4. รอ Receiver เชื่อมต่อ
+5. FAILSAFE ถูกปลด
+6. ระบบอยู่ STATE_DISARMED
+7. ARM ระบบ
+8. เริ่มใช้งาน
+
+======================================================================
+10. ARM / DISARM
+======================================================================
+
+ARM:
+- CH5 > 1500
+- STATE → ACTIVE
+
+DISARM:
+- CH5 < 1500
+- STATE → DISARMED
+
+เมื่อ DISARM:
+- มอเตอร์หยุดแบบ soft stop
+- เครื่องยนต์ดับ
+- Relay OFF
+
+======================================================================
+11. DRIVE CONTROL
+======================================================================
+
+Stick ขวา:
+
+ขึ้น/ลง:
+- เดินหน้า / ถอยหลัง
+
+ซ้าย/ขวา:
+- เลี้ยว
+
+ระบบรองรับ:
+- Differential drive
+- Deadzone
+- Soft start
+- Soft stop
+- Direction reversal protection
+- Slew limiting
+
+IMPORTANT:
+- ไม่มี speed feedback
+- ไม่มี traction control
+- ไม่มี current limiting
+
+======================================================================
+12. ENGINE CONTROL
+======================================================================
+
+ลำดับการสตาร์ต:
+
+1. ARM ระบบ
+2. CH6 ON (Ignition)
+3. กด CH7 (Starter)
+4. ไม่ควรกดเกิน 2.5 วินาที
+5. ปล่อย Starter
+6. ใช้ CH3 ควบคุมคันเร่ง
+
+IMPORTANT:
+- ยังไม่มี RPM sensor
+- ระบบยังไม่รู้ว่าเครื่องติดจริงหรือไม่
+- RUNNING state ยังเป็น logic-only
+
+======================================================================
+13. LIGHT CONTROL
+======================================================================
+
+CH8 ON
+→ Light Relay ON
+
+CH8 OFF
+→ Light Relay OFF
+
+FAILSAFE:
+→ Light Relay OFF
+
+======================================================================
+14. FAILSAFE SYSTEM
+======================================================================
+
+FAILSAFE จะเกิดเมื่อ:
+
+- รีโมทปิด
+- Receiver ดับ
+- IBUS timeout
+- สัญญาณผิดปกติต่อเนื่อง
+
+เมื่อ FAILSAFE:
+
+- ระบบสั่งหยุดมอเตอร์
+- Disable BTS7960
+- Ignition OFF
+- Starter OFF
+- Relay OFF
+
+IMPORTANT:
+- เป็น software failsafe
+- ยังไม่ใช่ hardware power cutoff
+
+======================================================================
+15. FAILSAFE RECOVERY
+======================================================================
+
+ระบบจะไม่ recover เองอัตโนมัติ
+
+ต้อง:
+
+1. แก้ปัญหาสัญญาณ
+2. ปิด ARM
+3. รอ signal stable
+4. ARM ใหม่
+
+======================================================================
+16. BUILT-IN PROTECTION
+======================================================================
+
+มี:
+- IBUS validation
+- FAILSAFE latch
+- Soft stop
+- Servo slew limiter
+- Deadzone
+- Direction reversal protection
+- Watchdog timer
+- Starter timeout
+
+ยังไม่มี:
+- Encoder feedback
+- Current sensor protection
+- Thermal protection
+- Brownout protection
+- Hardware E-stop
+- Closed-loop speed control
+
+======================================================================
+17. IMPORTANT LIMITATIONS
+======================================================================
+
+ระบบนี้:
+- ยังเป็น Open-loop
+- ไม่มี obstacle avoidance
+- ไม่มี autonomous navigation
+- ไม่มี motor feedback
+- ไม่มี relay feedback
+- ไม่มี actuator watchdog
+
+IMPORTANT:
+- ห้ามปล่อยรถทำงานโดยไม่มีผู้ควบคุม
+- ต้องมี emergency stop จริงเสมอ
+- ต้องทดสอบบนล้อยกก่อนลงพื้นจริง
+
+======================================================================
+18. EMI / NOISE WARNING
+======================================================================
+
+ระบบมอเตอร์กำลังสูงอาจเกิด:
+- EMI
+- Voltage spike
+- Brownout
+- Power transient
+
+อาการที่อาจเกิด:
+- Arduino reboot
+- Servo jitter
+- IBUS หลุด
+- Receiver reset
+
+แนะนำ:
+- แยกสาย signal กับ power
+- ใช้ twisted pair
+- ใช้ capacitor
+- ใช้ ferrite bead
+- ติด TVS diode
+- เดิน ground แบบ star grounding
+
+======================================================================
+19. THERMAL WARNING
+======================================================================
+
+BTS7960 และมอเตอร์อาจร้อนมากเมื่อ:
+- หญ้าหนา
+- ล้อติด
+- โหลดหนัก
+- ใช้งานต่อเนื่อง
+
+ต้อง:
+- ติด heatsink
+- มี airflow
+- ตรวจสอบอุณหภูมิจริง
+
+======================================================================
+20. REQUIRED LIBRARIES
+======================================================================
+
+Arduino IDE Libraries:
+
+- Servo
+- IBusBM by bmellink
+- BTS7960 by Rob Tillaart
+
+IBusBM:
+https://github.com/bmellink/IBusBM
+
+BTS7960:
+https://github.com/RobTillaart/BTS7960
+
+======================================================================
+21. SOFTWARE ARCHITECTURE
+======================================================================
+
+IBusManager
+    ↓
+SafetyManager
+    ↓
+SystemState
+    ↓
+DriveManager
+EngineManager
+RelayManager
+
+IMPORTANT:
+- SystemState เป็น single source of truth
+- SafetyManager ไม่ควบคุม hardware ตรง
+- ทุก actuator ถูก dispatch ผ่าน SystemState
+
+
+======================================================================
+END OF DOCUMENT
 ======================================================================
